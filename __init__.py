@@ -1,4 +1,4 @@
-"""ComfyUI node for sending images to Discord and saving them locally"""
+"""ComfyUI nodes for sending images and video to Discord and saving them locally"""
 
 import os
 import sys
