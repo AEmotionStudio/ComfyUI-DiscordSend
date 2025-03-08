@@ -406,13 +406,10 @@ def extract_prompts_from_workflow(workflow_data):
     if positive_prompt is not None and negative_prompt is None:
         negative_prompt = ""
     
-    # If testing shows this is STILL backwards, uncomment this line to force swap them
-    # return negative_prompt, positive_prompt
-    
     print(f"extract_prompts_from_workflow returning: positive={positive_prompt is not None}, negative={negative_prompt is not None}")
     
-    # Swap the positive and negative prompts as they're currently reversed
-    return negative_prompt, positive_prompt
+    # Return the prompts in the correct order
+    return positive_prompt, negative_prompt
 
 class DiscordSendSaveImage:
     """
