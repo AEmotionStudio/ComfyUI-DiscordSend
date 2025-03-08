@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-discordsend"
+description = "A ComfyUI extension that enables seamless sharing of AI-generated images and videos directly to Discord."
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["requests>=2.25.0"]
+
+[project.urls]
+Repository = "https://github.com/AEmotionStudio/ComfyUI-DiscordSend"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "aemotionstudio"
+DisplayName = "ComfyUI-DiscordSend"
+Icon = ""
