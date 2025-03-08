@@ -82,7 +82,7 @@ ComfyUI-DiscordSend includes an automatic webhook sanitization feature that:
 - Removes webhook URLs from workflow JSON files before they're sent to Discord
 - Sanitizes image metadata to prevent webhook URLs from being embedded in saved images
 - Filters webhook URLs from Discord messages to prevent accidental token sharing
-- Ensures that webhook URLs are never exposed through any generated content, so long as you are using this node to save and not other save nodes in combination (as other save nodes will not sanitize the webhook url when saving alongside this one).
+- Ensures that webhook URLs are never exposed through any generated content, so long as you are using these nodes to save and not other save nodes in combination (as other save nodes will not sanitize the webhook url when saving alongside this one).
 
 This comprehensive sanitization helps protect your Discord server's webhook tokens from accidental exposure in logs, screenshots, saved files, or shared content while making it easier to use any webhook URL format.
 
@@ -240,6 +240,14 @@ Contributions are welcome! Feel free to:
 
 Please follow the standard GitHub flow for contributions.
 
+## ☕ Support
+
+If you find ComfyUI-DiscordSend useful, consider supporting its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/aemotionstudio)
+
+Your support helps me dedicate more time to maintaining and improving this project and others with new features, bug fixes, and better documentation.
+
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -247,4 +255,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgements
 
 - ComfyUI team for the amazing platform
-- All contributors and users who provide feedback 
+- All contributors and users who provide feedback
