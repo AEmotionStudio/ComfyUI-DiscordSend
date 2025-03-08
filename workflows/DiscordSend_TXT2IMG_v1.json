@@ -1,0 +1,527 @@
+{
+  "last_node_id": 90,
+  "last_link_id": 143,
+  "nodes": [
+    {
+      "id": 70,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        -1193.2313232421875,
+        -2268.5
+      ],
+      "size": [
+        315,
+        98
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "shape": 3,
+          "links": [
+            143
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "shape": 3,
+          "links": [
+            118
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "shape": 3,
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "dreamshaper_8.safetensors"
+      ],
+      "color": "#332922",
+      "bgcolor": "#593930"
+    },
+    {
+      "id": 71,
+      "type": "VAELoader",
+      "pos": [
+        -1264.126220703125,
+        -2002.368896484375
+      ],
+      "size": [
+        385.8948669433594,
+        58
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "shape": 3,
+          "links": [
+            120
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "SD1.5\\vae-ft-mse-840000-ema-pruned.safetensors"
+      ],
+      "color": "#332922",
+      "bgcolor": "#593930"
+    },
+    {
+      "id": 74,
+      "type": "VAEDecode",
+      "pos": [
+        -300,
+        -1600
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 119
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 120
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "shape": 3,
+          "links": [
+            142
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": [],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 85,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -799.4965209960938,
+        -1967.837890625
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 135
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            137
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "bad, ugly, two tails, malformed, deformed, horror, (worst quality, low quality: 1.4),"
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 84,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -799.4965209960938,
+        -2268.5
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 134
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            136
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "a majestic white tiger sitting near a waterfall, center view, symmetrical, flowing water, white lillies, white flowers, nature, moss, beautiful trees, lush forest, serene, calming, high quality, masterpiece, "
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 72,
+      "type": "CLIPSetLastLayer",
+      "pos": [
+        -1193.2313232421875,
+        -2117
+      ],
+      "size": [
+        315,
+        58
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 118
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "shape": 3,
+          "links": [
+            134,
+            135
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CLIPSetLastLayer"
+      },
+      "widgets_values": [
+        -2
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 73,
+      "type": "EmptyLatentImage",
+      "pos": [
+        -300,
+        -1750
+      ],
+      "size": [
+        315,
+        106
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "shape": 3,
+          "links": [
+            125
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        768,
+        768,
+        1
+      ],
+      "color": "#2a363b",
+      "bgcolor": "#3f5159"
+    },
+    {
+      "id": 76,
+      "type": "KSampler",
+      "pos": [
+        -300,
+        -2270
+      ],
+      "size": [
+        315,
+        474
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 143
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 136
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 137
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 125
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "shape": 3,
+          "links": [
+            119
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        888937,
+        "fixed",
+        30,
+        8,
+        "uni_pc",
+        "karras",
+        1
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 90,
+      "type": "DiscordSendSaveImage",
+      "pos": [
+        100,
+        -2270
+      ],
+      "size": [
+        400,
+        508
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 142
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image_path",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "aux_id": "AEmotionStudio/ComfyUI-DiscordSend",
+        "ver": "3b2e21e1d3b90d04bd54bd51e9b5b29d405f2c17",
+        "Node name for S&R": "DiscordSendSaveImage"
+      },
+      "widgets_values": [
+        "ComfyUI-Image",
+        "disable",
+        "png",
+        95,
+        true,
+        true,
+        true,
+        "enable",
+        "enable",
+        "enable",
+        "disable",
+        "lanczos",
+        true,
+        "",
+        "",
+        true,
+        true,
+        true,
+        true
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    }
+  ],
+  "links": [
+    [
+      118,
+      70,
+      1,
+      72,
+      0,
+      "CLIP"
+    ],
+    [
+      119,
+      76,
+      0,
+      74,
+      0,
+      "LATENT"
+    ],
+    [
+      120,
+      71,
+      0,
+      74,
+      1,
+      "VAE"
+    ],
+    [
+      125,
+      73,
+      0,
+      76,
+      3,
+      "LATENT"
+    ],
+    [
+      134,
+      72,
+      0,
+      84,
+      0,
+      "CLIP"
+    ],
+    [
+      135,
+      72,
+      0,
+      85,
+      0,
+      "CLIP"
+    ],
+    [
+      136,
+      84,
+      0,
+      76,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      137,
+      85,
+      0,
+      76,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      142,
+      74,
+      0,
+      90,
+      0,
+      "IMAGE"
+    ],
+    [
+      143,
+      70,
+      0,
+      76,
+      0,
+      "MODEL"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8264462809917354,
+      "offset": [
+        1306.035455615458,
+        2467.929546393067
+      ]
+    },
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

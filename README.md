@@ -71,6 +71,21 @@ pip install -r requirements.txt  # Installs the minimal requirements (only the r
 2. Create a New Webhook and copy the Webhook URL
 3. Paste this URL into the "webhook_url" field in the DiscordSend nodes
 
+#### Webhook Auto-Sanitization
+
+ComfyUI-DiscordSend includes an automatic webhook sanitization feature that:
+- Strips out sensitive parts of the webhook URL when displaying in logs
+- Automatically converts various Discord webhook URL formats to the standard format
+- Supports Discord webhook URLs from different domains (discord.com, discordapp.com)
+- Validates webhook URLs before sending to help prevent errors
+- Preserves the webhook token internally for actual API calls while hiding it from exposure
+- Removes webhook URLs from workflow JSON files before they're sent to Discord
+- Sanitizes image metadata to prevent webhook URLs from being embedded in saved images
+- Filters webhook URLs from Discord messages to prevent accidental token sharing
+- Ensures that webhook URLs are never exposed through any generated content, so long as you are using this node to save and not other save nodes in combination (as other save nodes will not sanitize the webhook url when saving alongside this one).
+
+This comprehensive sanitization helps protect your Discord server's webhook tokens from accidental exposure in logs, screenshots, saved files, or shared content while making it easier to use any webhook URL format.
+
 > [!WARNING]
 > **Security Recommendation**: It is strongly recommended to only share access to your server webhook with trusted users. Creating individual webhook integrations per user makes it easier to identify which user is sending content to your Discord server. Using a single webhook for multiple users makes content moderation difficult as all uploads will appear under the same webhook identity.
 
