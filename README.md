@@ -266,6 +266,18 @@ Contributions are welcome! Feel free to:
 
 Please follow the standard GitHub flow for contributions.
 
+## 🙏 Acknowledgements
+
+- ComfyUI team for the amazing platform
+- All contributors and users who provide feedback
+
+## 🔗 Connect with me
+
+- YouTube: [AEmotionStudio](https://www.youtube.com/@aemotionstudio/videos)
+- GitHub: [AEmotionStudio](https://github.com/AEmotionStudio)
+- Discord: [Join our community](https://discord.gg/UzC9353mfp)
+- Website: [aemotionstudio.org](https://aemotionstudio.org/)
+
 ## ☕ Support
 
 If you find ComfyUI-DiscordSend useful, consider supporting its development:
@@ -274,11 +286,14 @@ If you find ComfyUI-DiscordSend useful, consider supporting its development:
 
 Your support helps me dedicate more time to maintaining and improving this project and others with new features, bug fixes, and better documentation.
 
+### 💖 Additional Ways to Support
+
+- ⭐ Star the repository
+- 📢 Share it with others
+- 🛠️ Contribute to its development
+
+For business inquiries or professional support, please contact me through my [website](https://aemotionstudio.org/) or join my [Discord server](https://discord.gg/UzC9353mfp).
+
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgements
-
-- ComfyUI team for the amazing platform
-- All contributors and users who provide feedback
