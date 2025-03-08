@@ -116,6 +116,20 @@ When sending multiple images in a batch:
 > - The video node does not display a preview in the ComfyUI interface, unlike the image node
 > - For best Discord compatibility, keep videos under 8MB (or 50MB for servers with boosts)
 
+### 📱 Discord Message Preview
+
+Here's how your images and videos will appear in Discord when sent using ComfyUI-DiscordSend:
+
+![Discord message formatting](/images/discord_formatting.png)
+
+The node formats messages with:
+- Optional custom message text
+- Generation prompts when enabled
+- Technical details about the media
+- Professional presentation with markdown formatting
+- Attached workflow JSON file when enabled
+- Image galleries for batch uploads (up to 9 images per message)
+
 ## 📝 Configuration Options
 
 ### DiscordSendSaveImage Options
