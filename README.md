@@ -67,9 +67,21 @@ pip install -r requirements.txt  # Installs the minimal requirements (only the r
 
 ### Discord Webhook Setup
 
+#### Step 1: Access Webhook Settings
 1. In Discord, go to your server settings → Integrations → Webhooks
+
+![Discord webhook settings](/images/discord_webhook_step1.png)
+
+#### Step 2: Create and Copy Webhook
 2. Create a New Webhook and copy the Webhook URL
+
+![Create and copy webhook](/images/discord_webhook_step2.png)
+![Create and copy webhook](/images/discord_webhook_step2_2.png)
+
+#### Step 3: Configure the Node
 3. Paste this URL into the "webhook_url" field in the DiscordSend nodes
+
+![Configure webhook in node](/images/discord_webhook_step4.png)
 
 #### Webhook Auto-Sanitization
 
