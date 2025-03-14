@@ -1,6 +1,6 @@
 # ComfyUI-DiscordSend
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)
 
@@ -11,6 +11,7 @@ ComfyUI-DiscordSend provides custom nodes for ComfyUI that allow you to seamless
 - Send images, videos, and workflows directly to Discord via webhooks
 - Include prompt information and metadata with your creations
 - Maintain unique identifiers between different users and uploads
+- Archive Discord CDN URLs to GitHub repositories for easy access
 
 > [!TIP]
 > Perfect for sharing your creations with communities, friends, or your own archive channels!
@@ -35,12 +36,21 @@ ComfyUI-DiscordSend provides custom nodes for ComfyUI that allow you to seamless
 
 - Convert image sequences to videos in multiple formats
 - Support for GIF, MP4, WebM, and professional formats like ProRes
-- Configurable frame rates and quality settings
+- Configurable frame rates from 0.1 to 120 fps (slow-motion to time-lapse)
+- Extra-slow frame rates below 1 fps for photo slideshows (e.g., 0.5 fps = 2 seconds per image)
 - Add audio to your videos (when supported by format)
 - Special effects like ping-pong looping
 - Discord integration for sharing videos
 - Include workflow data and video information in messages
 - UUID support for distinguishing between multiple user uploads
+
+### 🔄 GitHub Integration
+
+- Save Discord CDN URLs to a GitHub repository
+- Automatically update existing URL collections with new uploads
+- Formatted markdown files with timestamps and organized links
+- Perfect for building media galleries or documentation
+- Comprehensive security measures for GitHub tokens
 
 ## 📥 Installation
 
@@ -101,6 +111,24 @@ This comprehensive sanitization helps protect your Discord server's webhook toke
 > [!WARNING]
 > **Security Recommendation**: It is strongly recommended to only share access to your server webhook with trusted users. Creating individual webhook integrations per user makes it easier to identify which user is sending content to your Discord server. Using a single webhook for multiple users makes content moderation difficult as all uploads will appear under the same webhook identity.
 
+### GitHub Integration Setup
+
+The GitHub integration allows you to automatically save Discord CDN URLs to a GitHub repository.
+
+1. Create a personal access token with `repo` permissions on GitHub
+2. Configure the GitHub options in the node:
+   - `github_cdn_update`: Enable to activate GitHub integration
+   - `github_repo`: Your repository in format `username/repo`
+   - `github_token`: Your personal access token
+   - `github_file_path`: Path to the file in repository (default: `cdn_urls.md`)
+
+> [!NOTE]
+> GitHub tokens are secured with the same comprehensive sanitization as webhook URLs. Tokens are:
+> - Hidden from logs with [REDACTED_TOKEN]
+> - Removed from workflow JSON files before sharing
+> - Sanitized from image metadata
+> - Protected in error messages and tracebacks
+
 ### Image Node
 
 1. Add the `DiscordSendSaveImage` node to your workflow
@@ -123,6 +151,15 @@ When sending multiple images in a batch:
 3. Set frame rate, format, and other video options
 4. Optionally connect audio
 5. Run your workflow to create and send videos!
+
+#### Creating Photo Slideshows
+
+You can now create slideshow videos from still images:
+- Use frame rates below 1 to make each image stay longer on screen
+- Example: 0.5 fps = 2 seconds per image
+- Example: 0.25 fps = 4 seconds per image
+- Example: 0.1 fps = 10 seconds per image
+- Perfect for creating galleries and presentations from your images
 
 > [!NOTE]
 > - The video node does not display a preview in the ComfyUI interface, unlike the image node
@@ -172,6 +209,12 @@ The node formats messages with:
 | `include_format_in_message` | Include image format details in message |
 | `group_batched_images` | Group batch images into one Discord message (max 9 images) |
 | `send_workflow_json` | Send workflow JSON for reproducibility |
+| **GitHub Options** ||
+| `save_cdn_urls` | Save the Discord CDN URLs as a text file and attach to Discord message |
+| `github_cdn_update` | Update a GitHub repository with Discord CDN URLs |
+| `github_repo` | GitHub repository in format "username/repo" |
+| `github_token` | GitHub personal access token (with repo permissions) |
+| `github_file_path` | Path to file in repository to update (default: "cdn_urls.md") |
 
 ### DiscordSendSaveVideo Options
 
@@ -183,7 +226,7 @@ The node formats messages with:
 | `overwrite_last` | Enable to overwrite last video instead of incrementing filenames |
 | **Video Options** ||
 | `format` | Various formats including GIF, MP4, WebM, ProRes |
-| `frame_rate` | Frames per second (1-120) |
+| `frame_rate` | Frames per second (0.1-120), values below 1 make images stay longer |
 | `quality` | Quality setting for compression (1-100) |
 | `loop_count` | Number of loops for GIF (0=infinite) |
 | `lossless` | Use lossless compression when available |
@@ -201,6 +244,12 @@ The node formats messages with:
 | `include_prompts_in_message` | Include generation prompts in Discord message |
 | `include_video_info` | Include video format details in message (disable if you don't want time/format info) |
 | `send_workflow_json` | Send workflow JSON for reproducibility |
+| **GitHub Options** ||
+| `save_cdn_urls` | Save the Discord CDN URLs as a text file and attach to Discord message |
+| `github_cdn_update` | Update a GitHub repository with Discord CDN URLs |
+| `github_repo` | GitHub repository in format "username/repo" |
+| `github_token` | GitHub personal access token (with repo permissions) |
+| `github_file_path` | Path to file in repository to update (default: "cdn_urls.md") |
 
 ## 📋 Requirements
 
@@ -249,6 +298,11 @@ The node formats messages with:
 4. **UUID Support and Conflicts**
    - Each upload includes a UUID to prevent conflicts between users
    - If you experience files overwriting each other, ensure multiple users aren't sharing the same output directory
+
+5. **GitHub Integration Issues**
+   - Verify your token has proper permissions (needs 'repo' scope)
+   - Ensure the repository exists and you have write access
+   - Check that the file path is valid and doesn't conflict with existing directories
 
 ### Known Issues
 

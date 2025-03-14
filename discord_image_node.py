@@ -15,6 +15,7 @@ from io import BytesIO
 from uuid import uuid4
 from typing import Any, Union, List, Optional
 from pathlib import Path
+import base64
 
 class SaveImage:
     def __init__(self):
@@ -88,13 +89,13 @@ def tensor_to_cv(tensor: torch.Tensor) -> np.ndarray:
 # Helper function to sanitize JSON data by removing webhook information
 def sanitize_json_for_export(json_data):
     """
-    Remove sensitive webhook data from JSON data to protect user security.
+    Remove sensitive webhook data and GitHub tokens from JSON data to protect user security.
     
     Parameters:
         json_data: The JSON data object (dict) or string to sanitize
         
     Returns:
-        The sanitized JSON data with webhook information removed
+        The sanitized JSON data with webhook information and GitHub tokens removed
     """
     if json_data is None:
         return None
@@ -115,108 +116,168 @@ def sanitize_json_for_export(json_data):
     # Create a deep copy to avoid modifying the original
     sanitized_data = json.loads(json.dumps(data))
     
-    # Sanitize the workflow data (remove webhook URLs)
+    # Sanitize the workflow data (remove webhook URLs and GitHub tokens)
     if "nodes" in sanitized_data:
         # Handle the case where nodes is a list (not a dictionary)
         if isinstance(sanitized_data["nodes"], list):
             for node in sanitized_data["nodes"]:
                 if isinstance(node, dict):
-                    # Check for webhook_url in inputs
+                    # Check for webhook_url and github_token in inputs
                     if "inputs" in node and isinstance(node["inputs"], dict):
                         inputs = node["inputs"]
                         if "webhook_url" in inputs:
                             inputs["webhook_url"] = ""
                             print("Removed webhook URL from workflow JSON for security")
+                        if "github_token" in inputs:
+                            inputs["github_token"] = ""
+                            print("Removed GitHub token from workflow JSON for security")
                         
                         # If inputs has any fields that are dictionaries, check them too
                         for input_name, input_value in inputs.items():
-                            if isinstance(input_value, dict) and "webhook_url" in input_value:
-                                input_value["webhook_url"] = ""
-                                print(f"Removed nested webhook URL from {input_name} in workflow JSON")
+                            if isinstance(input_value, dict):
+                                if "webhook_url" in input_value:
+                                    input_value["webhook_url"] = ""
+                                    print(f"Removed nested webhook URL from {input_name} in workflow JSON")
+                                if "github_token" in input_value:
+                                    input_value["github_token"] = ""
+                                    print(f"Removed nested GitHub token from {input_name} in workflow JSON")
                     
-                    # Check for webhook URL in widgets_values array
+                    # Check for webhook URL or GitHub token in widgets_values array
                     if "widgets_values" in node and isinstance(node["widgets_values"], list):
-                        # First method: check for Discord node by type
-                        is_discord_node = False
+                        # First method: check for Discord/GitHub node by type
+                        is_sensitive_node = False
                         if "type" in node and isinstance(node["type"], str):
-                            # Check for any node that might contain Discord or webhook in its name
-                            if "Discord" in node["type"] or "discord" in node["type"] or "webhook" in node["type"].lower():
-                                is_discord_node = True
+                            # Check for any node that might contain Discord, webhook, or GitHub in its name
+                            if ("Discord" in node["type"] or "discord" in node["type"] or 
+                                "webhook" in node["type"].lower() or "github" in node["type"].lower()):
+                                is_sensitive_node = True
                                 
-                        # Thoroughly scan all widget values for webhook URLs regardless of node type
+                        # Thoroughly scan all widget values for sensitive data regardless of node type
                         for i, value in enumerate(node["widgets_values"]):
-                            # Check for webhook URL in any string value
+                            # Check for sensitive data in any string value
                             if isinstance(value, str):
                                 # Look for Discord webhook URLs
                                 if "discord.com/api/webhooks" in value:
                                     node["widgets_values"][i] = ""
                                     print(f"Removed webhook URL from widgets_values[{i}] for security")
-                                # Also check for other webhook patterns
+                                # Check for other webhook patterns
                                 elif value.startswith("http") and ("webhook" in value.lower() or "discord" in value.lower()):
                                     node["widgets_values"][i] = ""
                                     print(f"Removed potential webhook URL from widgets_values[{i}] for security")
+                                # Check for GitHub tokens
+                                elif (value.startswith("ghp_") or  # GitHub personal access token
+                                      value.startswith("github_pat_") or  # GitHub personal access token
+                                      value.startswith("gho_") or  # GitHub OAuth token
+                                      value.startswith("ghs_") or  # GitHub service token
+                                      value.startswith("ghu_")):  # GitHub user-to-server token
+                                    node["widgets_values"][i] = ""
+                                    print(f"Removed GitHub token from widgets_values[{i}] for security")
+                                # Check for generic tokens that could be GitHub tokens
+                                elif len(value) >= 40 and "github" in node.get("type", "").lower() and any(c.isalnum() for c in value):
+                                    node["widgets_values"][i] = ""
+                                    print(f"Removed potential GitHub token from widgets_values[{i}] for security")
         
         # Handle the case where nodes is a dictionary (node_id -> node)
         elif isinstance(sanitized_data["nodes"], dict):
             for node_id, node in sanitized_data["nodes"].items():
                 if isinstance(node, dict):
-                    # Check for webhook_url in inputs
+                    # Check for webhook_url and github_token in inputs
                     if "inputs" in node and isinstance(node["inputs"], dict):
                         inputs = node["inputs"]
                         if "webhook_url" in inputs:
                             inputs["webhook_url"] = ""
                             print("Removed webhook URL from workflow JSON for security")
+                        if "github_token" in inputs:
+                            inputs["github_token"] = ""
+                            print("Removed GitHub token from workflow JSON for security")
                         
                         # If inputs has any fields that are dictionaries, check them too
                         for input_name, input_value in inputs.items():
-                            if isinstance(input_value, dict) and "webhook_url" in input_value:
-                                input_value["webhook_url"] = ""
-                                print(f"Removed nested webhook URL from {input_name} in workflow JSON")
+                            if isinstance(input_value, dict):
+                                if "webhook_url" in input_value:
+                                    input_value["webhook_url"] = ""
+                                    print(f"Removed nested webhook URL from {input_name} in workflow JSON")
+                                if "github_token" in input_value:
+                                    input_value["github_token"] = ""
+                                    print(f"Removed nested GitHub token from {input_name} in workflow JSON")
                     
-                    # Check for webhook URL in widgets_values array
+                    # Check for webhook URL or GitHub token in widgets_values array
                     if "widgets_values" in node and isinstance(node["widgets_values"], list):
-                        # First method: check for Discord node by type
-                        is_discord_node = False
+                        # First method: check for Discord/GitHub node by type
+                        is_sensitive_node = False
                         if "type" in node and isinstance(node["type"], str):
-                            # Check for any node that might contain Discord or webhook in its name
-                            if "Discord" in node["type"] or "discord" in node["type"] or "webhook" in node["type"].lower():
-                                is_discord_node = True
+                            # Check for any node that might contain Discord, webhook, or GitHub in its name
+                            if ("Discord" in node["type"] or "discord" in node["type"] or 
+                                "webhook" in node["type"].lower() or "github" in node["type"].lower()):
+                                is_sensitive_node = True
                                 
-                        # Thoroughly scan all widget values for webhook URLs regardless of node type
+                        # Thoroughly scan all widget values for sensitive data regardless of node type
                         for i, value in enumerate(node["widgets_values"]):
-                            # Check for webhook URL in any string value
+                            # Check for sensitive data in any string value
                             if isinstance(value, str):
                                 # Look for Discord webhook URLs
                                 if "discord.com/api/webhooks" in value:
                                     node["widgets_values"][i] = ""
                                     print(f"Removed webhook URL from widgets_values[{i}] for security")
-                                # Also check for other webhook patterns
+                                # Check for other webhook patterns
                                 elif value.startswith("http") and ("webhook" in value.lower() or "discord" in value.lower()):
                                     node["widgets_values"][i] = ""
                                     print(f"Removed potential webhook URL from widgets_values[{i}] for security")
+                                # Check for GitHub tokens
+                                elif (value.startswith("ghp_") or  # GitHub personal access token
+                                      value.startswith("github_pat_") or  # GitHub personal access token
+                                      value.startswith("gho_") or  # GitHub OAuth token
+                                      value.startswith("ghs_") or  # GitHub service token
+                                      value.startswith("ghu_")):  # GitHub user-to-server token
+                                    node["widgets_values"][i] = ""
+                                    print(f"Removed GitHub token from widgets_values[{i}] for security")
+                                # Check for generic tokens that could be GitHub tokens
+                                elif len(value) >= 40 and "github" in node.get("type", "").lower() and any(c.isalnum() for c in value):
+                                    node["widgets_values"][i] = ""
+                                    print(f"Removed potential GitHub token from widgets_values[{i}] for security")
     
-    # Also handle extra_pnginfo format where there might be a webhook_url directly
+    # Also handle extra_pnginfo format where there might be direct sensitive data
     if "webhook_url" in sanitized_data:
         sanitized_data["webhook_url"] = ""
         print("Removed top-level webhook URL from JSON data")
     
-    # Recursively check for webhook_url in nested dictionaries
+    if "github_token" in sanitized_data:
+        sanitized_data["github_token"] = ""
+        print("Removed top-level GitHub token from JSON data")
+    
+    # Recursively check for sensitive data in nested dictionaries
     def check_nested_dict(d):
         if isinstance(d, dict):
+            # Check for direct sensitive keys
             if "webhook_url" in d:
                 d["webhook_url"] = ""
                 print("Removed nested webhook URL from JSON structure")
+            if "github_token" in d:
+                d["github_token"] = ""
+                print("Removed nested GitHub token from JSON structure")
+                
+            # Recursively check all key-value pairs
             for k, v in d.items():
                 if isinstance(v, (dict, list)):
                     check_nested_dict(v)
+                # Check if any string value looks like a GitHub token
+                elif isinstance(v, str):
+                    if (v.startswith("ghp_") or v.startswith("github_pat_") or 
+                        v.startswith("gho_") or v.startswith("ghs_") or v.startswith("ghu_")):
+                        d[k] = ""
+                        print(f"Removed a GitHub token from field '{k}' in JSON structure")
         elif isinstance(d, list):
-            for item in d:
+            for i, item in enumerate(d):
                 if isinstance(item, (dict, list)):
                     check_nested_dict(item)
-                # Check for webhook URLs in string items of lists
-                elif isinstance(item, str) and "discord.com/api/webhooks" in item:
-                    # Can't modify the string directly, but this will at least print a warning
-                    print("Warning: Found webhook URL in a list item that cannot be directly sanitized")
+                # Check for webhook URLs or GitHub tokens in string items of lists
+                elif isinstance(item, str):
+                    if "discord.com/api/webhooks" in item:
+                        # Can't modify the string directly, but this will at least print a warning
+                        print("Warning: Found webhook URL in a list item that cannot be directly sanitized")
+                    elif (item.startswith("ghp_") or item.startswith("github_pat_") or 
+                          item.startswith("gho_") or item.startswith("ghs_") or item.startswith("ghu_")):
+                        print("Warning: Found GitHub token in a list item that cannot be directly sanitized")
     
     # Apply the recursive check
     check_nested_dict(sanitized_data)
@@ -500,12 +561,35 @@ class DiscordSendSaveImage:
                 }),
                 "group_batched_images": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Group all images from a batch into a single Discord message with a gallery, rather than sending each one separately."
+                    "tooltip": "Group all images from a batch into a single Discord message with a gallery, rather than sending each one separately. Maximum is 9 images."
                 }),
                 "send_workflow_json": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Whether to send the workflow JSON alongside the image to Discord, allowing dragging the JSON into ComfyUI to restore the workflow."
-                })
+                }),
+                "save_cdn_urls": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Whether to save the Discord CDN URLs of the uploaded images as a text file and attach it to the Discord message."
+                }),
+                "github_cdn_update": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Whether to update a GitHub repository with the Discord CDN URLs."
+                }),
+                "github_repo": ("STRING", {
+                    "default": "", 
+                    "multiline": False,
+                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo)."
+                }),
+                "github_token": ("STRING", {
+                    "default": "", 
+                    "multiline": False,
+                    "tooltip": "GitHub personal access token with repo permissions."
+                }),
+                "github_file_path": ("STRING", {
+                    "default": "cdn_urls.md",
+                    "multiline": False, 
+                    "tooltip": "Path to the file within the GitHub repository to update with CDN URLs."
+                }),
             },
             "hidden": {
                 "prompt": "PROMPT", 
@@ -531,7 +615,9 @@ class DiscordSendSaveImage:
                    file_format="png", quality=95, lossless=True, add_date="disable", add_time="disable", 
                    add_dimensions="disable", resize_to_power_of_2="disable", save_output=True, 
                    resize_method="lanczos", show_preview=True, send_to_discord=False, webhook_url="", discord_message="",
-                   include_prompts_in_message=False, include_format_in_message=False, send_workflow_json=False, group_batched_images=True, prompt=None, extra_pnginfo=None):
+                   include_prompts_in_message=False, include_format_in_message=False, send_workflow_json=False, 
+                   group_batched_images=True, save_cdn_urls=False, github_cdn_update=False, github_repo="", 
+                   github_token="", github_file_path="cdn_urls.md", prompt=None, extra_pnginfo=None):
         """
         Save images for and optionally send to Discord.
         
@@ -555,6 +641,11 @@ class DiscordSendSaveImage:
             include_format_in_message: Whether to include the image format in Discord messages
             send_workflow_json: Whether to send the workflow JSON to Discord
             group_batched_images: Whether to group all images from a batch into a single Discord message
+            save_cdn_urls: Whether to save Discord CDN URLs as a text file and attach it to the Discord message
+            github_cdn_update: Whether to update a GitHub repository with the Discord CDN URLs
+            github_repo: GitHub repository (format: username/repo)
+            github_token: GitHub personal access token
+            github_file_path: Path to the file within the GitHub repository to update
             prompt: The generation prompt data
             extra_pnginfo: Extra PNG info for metadata
             
@@ -571,6 +662,10 @@ class DiscordSendSaveImage:
         batch_discord_files = []
         batch_discord_data = {}
         batch_workflow_json = None
+        
+        # For tracking Discord CDN URLs
+        discord_cdn_urls = []
+        batch_cdn_urls = []
         
         # Sanitize the workflow and extra_pnginfo data to remove webhook URLs
         # This protects user security when sharing images
@@ -1065,6 +1160,59 @@ class DiscordSendSaveImage:
                                     discord_sent_files.append(discord_filename)
                                     if send_workflow_json and "workflow" in files:
                                         print(f"Successfully sent workflow JSON for image {batch_number+1}")
+                                    
+                                    # Try to extract CDN URLs from batch response
+                                    if save_cdn_urls and response.status_code == 200:
+                                        try:
+                                            response_data = response.json()
+                                            print(f"Received JSON response from Discord with {len(response_data) if isinstance(response_data, dict) else 'invalid'} fields")
+                                            
+                                            if "attachments" in response_data and isinstance(response_data["attachments"], list):
+                                                print(f"Found {len(response_data['attachments'])} attachments in Discord response")
+                                                
+                                                for idx, attachment in enumerate(response_data["attachments"]):
+                                                    if "url" in attachment and "filename" in attachment:
+                                                        # Filter out workflow JSON files from URLs list
+                                                        if not attachment["filename"].endswith(".json"):
+                                                            batch_cdn_urls.append((attachment["filename"], attachment["url"]))
+                                                            print(f"Extracted CDN URL for batch image {idx+1}: {attachment['url']}")
+                                                        else:
+                                                            print(f"Skipping JSON file: {attachment['filename']}")
+                                                    else:
+                                                        print(f"Attachment {idx+1} missing URL or filename: {attachment.keys()}")
+                                                
+                                                print(f"Total batch CDN URLs collected: {len(batch_cdn_urls)}")
+                                                
+                                                # Create and send a text file with the CDN URLs if we have any
+                                                if batch_cdn_urls:
+                                                    try:
+                                                        # Create the text file content
+                                                        url_text_content = "# Discord CDN URLs\n\n"
+                                                        for idx, (filename, url) in enumerate(batch_cdn_urls):
+                                                            url_text_content += f"{idx+1}. {filename}: {url}\n"
+                                                        
+                                                        # Create a unique filename for the text file
+                                                        urls_filename = f"cdn_urls-{uuid4()}.txt"
+                                                        
+                                                        # Prepare the request with just the URL file
+                                                        url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
+                                                        url_data = {"content": "Discord CDN URLs for the uploaded images:"}
+                                                        
+                                                        # Send a follow-up message with just the URLs text file
+                                                        url_response = requests.post(
+                                                            webhook_url,
+                                                            files=url_files,
+                                                            data=url_data
+                                                        )
+                                                        
+                                                        if url_response.status_code in [200, 204]:
+                                                            print(f"Successfully sent CDN URLs text file to Discord")
+                                                        else:
+                                                            print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
+                                                    except Exception as e:
+                                                        print(f"Error creating or sending CDN URLs text file: {e}")
+                                        except Exception as e:
+                                            print(f"Error extracting CDN URLs from batch response: {e}")
                                 else:
                                     print(f"Error: Discord returned status code {response.status_code}")
                                     discord_send_success = False
@@ -1090,6 +1238,35 @@ class DiscordSendSaveImage:
             # Discord status
             if send_to_discord and discord_sent_files:
                 print("DiscordSendSaveImage: Successfully sent all images to Discord")
+                
+                # If we have CDN URLs and we're not in batch mode, send them as a text file
+                if save_cdn_urls and discord_cdn_urls and not (group_batched_images and len(images) > 1):
+                    try:
+                        # Create the text file content
+                        url_text_content = "# Discord CDN URLs\n\n"
+                        for idx, (filename, url) in enumerate(discord_cdn_urls):
+                            url_text_content += f"{idx+1}. {filename}: {url}\n"
+                        
+                        # Create a unique filename for the text file
+                        urls_filename = f"cdn_urls-{uuid4()}.txt"
+                        
+                        # Prepare the request with just the URL file
+                        url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
+                        url_data = {"content": "Discord CDN URLs for the uploaded images:"}
+                        
+                        # Send a follow-up message with just the URLs text file
+                        url_response = requests.post(
+                            webhook_url,
+                            files=url_files,
+                            data=url_data
+                        )
+                        
+                        if url_response.status_code in [200, 204]:
+                            print(f"Successfully sent CDN URLs text file to Discord")
+                        else:
+                            print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
+                    except Exception as e:
+                        print(f"Error creating or sending CDN URLs text file: {e}")
             elif send_to_discord and not discord_send_success:
                 print("DiscordSendSaveImage: There were errors sending some images to Discord")
         else:
@@ -1133,12 +1310,104 @@ class DiscordSendSaveImage:
                     print(f"Successfully sent batch of {len(batch_discord_files)} images to Discord as a gallery")
                     discord_send_success = True
                     discord_sent_files = ["batch_gallery"]  # Mark as successfully sent
-                else:
-                    print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
+                    
+                    # Try to extract CDN URLs from batch response
+                    if save_cdn_urls and response.status_code == 200:
+                        try:
+                            response_data = response.json()
+                            print(f"Received JSON response from Discord with {len(response_data) if isinstance(response_data, dict) else 'invalid'} fields")
+                            
+                            if "attachments" in response_data and isinstance(response_data["attachments"], list):
+                                print(f"Found {len(response_data['attachments'])} attachments in Discord response")
+                                
+                                for idx, attachment in enumerate(response_data["attachments"]):
+                                    if "url" in attachment and "filename" in attachment:
+                                        # Filter out workflow JSON files from URLs list
+                                        if not attachment["filename"].endswith(".json"):
+                                            batch_cdn_urls.append((attachment["filename"], attachment["url"]))
+                                            print(f"Extracted CDN URL for batch image {idx+1}: {attachment['url']}")
+                                        else:
+                                            print(f"Skipping JSON file: {attachment['filename']}")
+                                    else:
+                                        print(f"Attachment {idx+1} missing URL or filename: {attachment.keys()}")
+                                
+                                print(f"Total batch CDN URLs collected: {len(batch_cdn_urls)}")
+                                
+                                # Create and send a text file with the CDN URLs if we have any
+                                if batch_cdn_urls:
+                                    try:
+                                        # Create the text file content
+                                        url_text_content = "# Discord CDN URLs\n\n"
+                                        for idx, (filename, url) in enumerate(batch_cdn_urls):
+                                            url_text_content += f"{idx+1}. {filename}: {url}\n"
+                                        
+                                        # Create a unique filename for the text file
+                                        urls_filename = f"cdn_urls-{uuid4()}.txt"
+                                        
+                                        # Prepare the request with just the URL file
+                                        url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
+                                        url_data = {"content": "Discord CDN URLs for the uploaded images:"}
+                                        
+                                        # Send a follow-up message with just the URLs text file
+                                        url_response = requests.post(
+                                            webhook_url,
+                                            files=url_files,
+                                            data=url_data
+                                        )
+                                        
+                                        if url_response.status_code in [200, 204]:
+                                            print(f"Successfully sent CDN URLs text file to Discord")
+                                        else:
+                                            print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
+                                    except Exception as e:
+                                        print(f"Error creating or sending CDN URLs text file: {e}")
+                        except Exception as e:
+                            print(f"Error extracting CDN URLs from batch response: {e}")
+                    else:
+                        print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
                     discord_send_success = False
             except Exception as e:
                 print(f"Error sending batch to Discord: {e}")
                 discord_send_success = False
+
+        # Update GitHub repository with CDN URLs if enabled - MOVED HERE AFTER ALL DISCORD OPERATIONS
+        if github_cdn_update and send_to_discord and (discord_cdn_urls or batch_cdn_urls):
+            # Use whichever list of URLs we have
+            urls_to_send = discord_cdn_urls if discord_cdn_urls else batch_cdn_urls
+            
+            print(f"GitHub update is enabled with: repo={github_repo}, token_provided={'Yes' if github_token else 'No'}, file_path={github_file_path}")
+            print(f"Number of available CDN URLs to update GitHub: {len(urls_to_send)}")
+            
+            if urls_to_send:
+                # Call the GitHub update function
+                print(f"Updating GitHub repository {github_repo} with {len(urls_to_send)} Discord CDN URLs...")
+                success, message = update_github_cdn_urls(
+                    github_repo=github_repo,
+                    github_token=github_token,
+                    file_path=github_file_path,
+                    cdn_urls=urls_to_send
+                )
+                if success:
+                    print(f"GitHub update successful: {message}")
+                else:
+                    print(f"GitHub update failed: {message}")
+            else:
+                print("No CDN URLs available to update GitHub repository")
+        elif github_cdn_update:
+            # If GitHub update is enabled but not triggered, explain why
+            reasons = []
+            if not send_to_discord:
+                reasons.append("send_to_discord is disabled")
+            if not (discord_cdn_urls or batch_cdn_urls):
+                reasons.append("no CDN URLs were collected (did Discord upload succeed?)")
+            if not github_repo:
+                reasons.append("github_repo is empty")
+            if not github_token:
+                reasons.append("github_token is empty")
+            if not github_file_path:
+                reasons.append("github_file_path is empty")
+            
+            print(f"GitHub update was enabled but not triggered because: {', '.join(reasons)}")
         
         # Control UI preview based on show_preview flag
         if show_preview:
@@ -1152,5 +1421,172 @@ class DiscordSendSaveImage:
                   file_format="png", quality=95, lossless=True, add_date="disable", add_time="disable", 
                   add_dimensions="disable", resize_to_power_of_2="disable", save_output=True, 
                   resize_method="lanczos", show_preview=True, send_to_discord=False, webhook_url="", discord_message="",
-                  include_prompts_in_message=False, include_format_in_message=False, group_batched_images=True, send_workflow_json=False):
+                  include_prompts_in_message=False, include_format_in_message=False, group_batched_images=True, 
+                  send_workflow_json=False, save_cdn_urls=False, github_cdn_update=False, github_repo="", 
+                  github_token="", github_file_path="cdn_urls.md", prompt=None, extra_pnginfo=None):
         return True
+
+# Add function to send CDN URLs to GitHub repository
+def update_github_cdn_urls(github_repo, github_token, file_path, cdn_urls, commit_message=None):
+    """
+    Update a file in a GitHub repository with Discord CDN URLs.
+    
+    Parameters:
+        github_repo: The GitHub repository (format: username/repo)
+        github_token: The GitHub personal access token for authentication
+        file_path: The path to the file within the repository to update
+        cdn_urls: List of (filename, url) tuples containing Discord CDN URLs
+        commit_message: Optional commit message, defaults to a standard message
+        
+    Returns:
+        Tuple of (success, message) where success is a boolean and message is a status message
+    """
+    print(f"update_github_cdn_urls called with repo: {github_repo}, file_path: {file_path}, URLs count: {len(cdn_urls)}")
+    
+    # Check required parameters
+    if not github_repo:
+        print("Error: GitHub repository name is empty")
+        return False, "Missing GitHub repository name"
+    
+    if not github_token:
+        print("Error: GitHub token is empty")
+        return False, "Missing GitHub personal access token"
+    
+    if not file_path:
+        print("Error: GitHub file path is empty")
+        return False, "Missing file path in repository"
+    
+    if not cdn_urls:
+        print("Error: No CDN URLs provided to update")
+        return False, "No CDN URLs to update"
+    
+    # Ensure repository format is valid
+    if "/" not in github_repo:
+        print(f"Error: Invalid GitHub repository format: {github_repo}. Expected format: username/repo")
+        return False, f"Invalid GitHub repository format: {github_repo}. Expected format: username/repo"
+    
+    # Setup API endpoint for the file
+    api_url = f"https://api.github.com/repos/{github_repo}/contents/{file_path}"
+    
+    # Create headers with token but don't log the actual token
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # Log attempt without exposing the token
+    print(f"Attempting to access GitHub API at: {api_url} with authentication")
+    
+    try:
+        # Check if file exists and get its SHA if it does
+        file_sha = None
+        try:
+            print("Checking if file exists on GitHub...")
+            response = requests.get(api_url, headers=headers)
+            print(f"GitHub API check response: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                file_data = response.json()
+                file_sha = file_data.get("sha")
+                print(f"File exists, got SHA: {file_sha[:7]}...")
+                
+                # Get current content if file exists
+                current_content = ""
+                if file_data.get("content"):
+                    current_content = base64.b64decode(file_data["content"]).decode("utf-8")
+                    print(f"Retrieved existing file content ({len(current_content)} bytes)")
+            elif response.status_code == 404:
+                print("File doesn't exist yet, will create a new file")
+            else:
+                print(f"Unexpected response checking GitHub file: {response.status_code}")
+                print(f"Response body: {response.text[:200]}...")
+                return False, f"Error checking GitHub file: {response.status_code} - {response.text}"
+        except Exception as e:
+            # Continue with file creation if checking failed
+            print(f"Warning: Failed to check file existence: {str(e)}")
+        
+        # Prepare the file content with the CDN URLs
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Start with new content template
+        new_content = f"# Discord CDN URLs\nLast updated: {timestamp}\n\n"
+        
+        # If we have existing content, try to merge it
+        if file_sha and 'current_content' in locals() and current_content:
+            print("Merging with existing content...")
+            # Extract existing URLs
+            existing_urls = {}
+            for line in current_content.splitlines():
+                if ": https://" in line and "cdn.discordapp.com" in line:
+                    parts = line.split(": ", 1)
+                    if len(parts) == 2:
+                        name_part = parts[0]
+                        if ". " in name_part:  # Remove numbering if present
+                            name_part = name_part.split(". ", 1)[1]
+                        existing_urls[name_part] = parts[1]
+            
+            print(f"Found {len(existing_urls)} existing URLs in the file")
+            
+            # Add new URLs (don't duplicate filenames)
+            for filename, url in cdn_urls:
+                existing_urls[filename] = url
+            
+            # Format all URLs
+            new_content = f"# Discord CDN URLs\nLast updated: {timestamp}\n\n"
+            for i, (filename, url) in enumerate(existing_urls.items(), 1):
+                new_content += f"{i}. {filename}: {url}\n"
+                
+            print(f"Final content has {len(existing_urls)} URLs")
+        else:
+            # Just add the new URLs
+            print("Creating new content with just the new URLs")
+            for i, (filename, url) in enumerate(cdn_urls, 1):
+                new_content += f"{i}. {filename}: {url}\n"
+                
+            print(f"New content has {len(cdn_urls)} URLs")
+        
+        # Set default commit message if not provided
+        if not commit_message:
+            commit_message = f"Update Discord CDN URLs - {timestamp}"
+        
+        # Prepare the request data
+        data = {
+            "message": commit_message,
+            "content": base64.b64encode(new_content.encode("utf-8")).decode("utf-8"),
+        }
+        
+        # Add SHA if file exists (for updating instead of creating)
+        if file_sha:
+            data["sha"] = file_sha
+            print(f"Adding SHA to request for updating existing file")
+        else:
+            print("Creating new file (no SHA included)")
+        
+        # Make the request to create/update the file
+        print(f"Sending PUT request to GitHub API...")
+        response = requests.put(api_url, headers=headers, json=data)
+        
+        print(f"GitHub API response: Status {response.status_code}")
+        if response.status_code in [200, 201]:
+            print(f"GitHub API success response: {response.text[:200]}...")
+            return True, f"Successfully updated GitHub file with {len(cdn_urls)} Discord CDN URLs"
+        else:
+            print(f"GitHub API error response: {response.text[:200]}...")
+            return False, f"Error updating GitHub file: {response.status_code} - {response.text}"
+    
+    except Exception as e:
+        import traceback
+        print(f"Exception during GitHub update: {str(e)}")
+        
+        # Scrub any potential token from error messages before logging
+        error_message = str(e)
+        if github_token and github_token in error_message:
+            error_message = error_message.replace(github_token, "[REDACTED_TOKEN]")
+            
+        # Get traceback but ensure it doesn't contain the token
+        tb = traceback.format_exc()
+        if github_token and github_token in tb:
+            tb = tb.replace(github_token, "[REDACTED_TOKEN]")
+            
+        print(f"Traceback: {tb}")
+        return False, f"Exception during GitHub update: {error_message}"

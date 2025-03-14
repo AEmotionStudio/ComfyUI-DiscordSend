@@ -20,6 +20,172 @@ import subprocess
 import itertools
 import functools
 import server
+import base64
+
+# Helper function to send CDN URLs to GitHub repository
+def update_github_cdn_urls(github_repo, github_token, file_path, cdn_urls, commit_message=None):
+    """
+    Update a file in a GitHub repository with Discord CDN URLs.
+    
+    Parameters:
+        github_repo: The GitHub repository (format: username/repo)
+        github_token: The GitHub personal access token for authentication
+        file_path: The path to the file within the repository to update
+        cdn_urls: List of (filename, url) tuples containing Discord CDN URLs
+        commit_message: Optional commit message, defaults to a standard message
+        
+    Returns:
+        Tuple of (success, message) where success is a boolean and message is a status message
+    """
+    print(f"update_github_cdn_urls called with repo: {github_repo}, file_path: {file_path}, URLs count: {len(cdn_urls)}")
+    
+    # Check required parameters
+    if not github_repo:
+        print("Error: GitHub repository name is empty")
+        return False, "Missing GitHub repository name"
+    
+    if not github_token:
+        print("Error: GitHub token is empty")
+        return False, "Missing GitHub personal access token"
+    
+    if not file_path:
+        print("Error: GitHub file path is empty")
+        return False, "Missing file path in repository"
+    
+    if not cdn_urls:
+        print("Error: No CDN URLs provided to update")
+        return False, "No CDN URLs to update"
+    
+    # Ensure repository format is valid
+    if "/" not in github_repo:
+        print(f"Error: Invalid GitHub repository format: {github_repo}. Expected format: username/repo")
+        return False, f"Invalid GitHub repository format: {github_repo}. Expected format: username/repo"
+    
+    # Setup API endpoint for the file
+    api_url = f"https://api.github.com/repos/{github_repo}/contents/{file_path}"
+    
+    # Create headers with token but don't log the actual token
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # Log attempt without exposing the token
+    print(f"Attempting to access GitHub API at: {api_url} with authentication")
+    
+    try:
+        # Check if file exists and get its SHA if it does
+        file_sha = None
+        try:
+            print("Checking if file exists on GitHub...")
+            response = requests.get(api_url, headers=headers)
+            print(f"GitHub API check response: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                file_data = response.json()
+                file_sha = file_data.get("sha")
+                print(f"File exists, got SHA: {file_sha[:7]}...")
+                
+                # Get current content if file exists
+                current_content = ""
+                if file_data.get("content"):
+                    current_content = base64.b64decode(file_data["content"]).decode("utf-8")
+                    print(f"Retrieved existing file content ({len(current_content)} bytes)")
+            elif response.status_code == 404:
+                print("File doesn't exist yet, will create a new file")
+            else:
+                print(f"Unexpected response checking GitHub file: {response.status_code}")
+                print(f"Response body: {response.text[:200]}...")
+                return False, f"Error checking GitHub file: {response.status_code} - {response.text}"
+        except Exception as e:
+            # Continue with file creation if checking failed
+            print(f"Warning: Failed to check file existence: {str(e)}")
+        
+        # Prepare the file content with the CDN URLs
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Start with new content template
+        new_content = f"# Discord CDN URLs\nLast updated: {timestamp}\n\n"
+        
+        # If we have existing content, try to merge it
+        if file_sha and 'current_content' in locals() and current_content:
+            print("Merging with existing content...")
+            # Extract existing URLs
+            existing_urls = {}
+            for line in current_content.splitlines():
+                if ": https://" in line and "cdn.discordapp.com" in line:
+                    parts = line.split(": ", 1)
+                    if len(parts) == 2:
+                        name_part = parts[0]
+                        if ". " in name_part:  # Remove numbering if present
+                            name_part = name_part.split(". ", 1)[1]
+                        existing_urls[name_part] = parts[1]
+            
+            print(f"Found {len(existing_urls)} existing URLs in the file")
+            
+            # Add new URLs (don't duplicate filenames)
+            for filename, url in cdn_urls:
+                existing_urls[filename] = url
+            
+            # Format all URLs
+            new_content = f"# Discord CDN URLs\nLast updated: {timestamp}\n\n"
+            for i, (filename, url) in enumerate(existing_urls.items(), 1):
+                new_content += f"{i}. {filename}: {url}\n"
+                
+            print(f"Final content has {len(existing_urls)} URLs")
+        else:
+            # Just add the new URLs
+            print("Creating new content with just the new URLs")
+            for i, (filename, url) in enumerate(cdn_urls, 1):
+                new_content += f"{i}. {filename}: {url}\n"
+                
+            print(f"New content has {len(cdn_urls)} URLs")
+        
+        # Set default commit message if not provided
+        if not commit_message:
+            commit_message = f"Update Discord CDN URLs - {timestamp}"
+        
+        # Prepare the request data
+        data = {
+            "message": commit_message,
+            "content": base64.b64encode(new_content.encode("utf-8")).decode("utf-8"),
+        }
+        
+        # Add SHA if file exists (for updating instead of creating)
+        if file_sha:
+            data["sha"] = file_sha
+            print(f"Adding SHA to request for updating existing file")
+        else:
+            print("Creating new file (no SHA included)")
+        
+        # Make the request to create/update the file
+        print(f"Sending PUT request to GitHub API...")
+        response = requests.put(api_url, headers=headers, json=data)
+        
+        print(f"GitHub API response: Status {response.status_code}")
+        if response.status_code in [200, 201]:
+            print(f"GitHub API success response: {response.text[:200]}...")
+            return True, f"Successfully updated GitHub file with {len(cdn_urls)} Discord CDN URLs"
+        else:
+            print(f"GitHub API error response: {response.text[:200]}...")
+            return False, f"Error updating GitHub file: {response.status_code} - {response.text}"
+    
+    except Exception as e:
+        import traceback
+        print(f"Exception during GitHub update: {str(e)}")
+        
+        # Scrub any potential token from error messages before logging
+        error_message = str(e)
+        if github_token and github_token in error_message:
+            error_message = error_message.replace(github_token, "[REDACTED_TOKEN]")
+            
+        # Get traceback but ensure it doesn't contain the token
+        tb = traceback.format_exc()
+        if github_token and github_token in tb:
+            tb = tb.replace(github_token, "[REDACTED_TOKEN]")
+            
+        print(f"Traceback: {tb}")
+        return False, f"Exception during GitHub update: {error_message}"
 
 # Define cached decorator for local use
 def cached(max_size=None):
@@ -87,19 +253,19 @@ if ffmpeg_path is None:
     except Exception as e:
         print(f"Error during ffmpeg detection: {str(e)}")
 
-# Improved sanitization function for webhook URLs
+# Improved sanitization function for webhook URLs and GitHub tokens
 def sanitize_json_for_export(json_data):
     """
-    Enhanced sanitization to remove webhook URLs for security in exported data.
+    Enhanced sanitization to remove webhook URLs and GitHub tokens for security in exported data.
     
-    Thoroughly scans and removes any Discord webhook URLs or similar sensitive data
+    Thoroughly scans and removes any Discord webhook URLs, GitHub tokens, or similar sensitive data
     from JSON structures, making them safe for sharing and exporting.
     
     Parameters:
         json_data: The JSON data object (dict, list, or string) to sanitize
         
     Returns:
-        The sanitized JSON data with webhook information removed
+        The sanitized JSON data with webhook information and GitHub tokens removed
     """
     if json_data is None:
         return None
@@ -115,18 +281,33 @@ def sanitize_json_for_export(json_data):
             if ("discord.com/api/webhooks" in json_data or 
                 (json_data.startswith("http") and ("webhook" in json_data.lower() or "discord" in json_data.lower()))):
                 return ""
+            # Check if it's a GitHub token in string format
+            elif (json_data.startswith("ghp_") or      # GitHub personal access token
+                  json_data.startswith("github_pat_") or  # GitHub personal access token
+                  json_data.startswith("gho_") or      # GitHub OAuth token
+                  json_data.startswith("ghs_") or      # GitHub service token
+                  json_data.startswith("ghu_")):       # GitHub user-to-server token
+                print("Sanitized GitHub token from JSON string")
+                return ""
             return json_data
     
     if isinstance(json_data, dict):
         result = {}
         for key, value in json_data.items():
-            # Handle webhook URLs in keys
+            # Handle sensitive keys
             sanitized_key = key
-            if isinstance(key, str) and "webhook" in key.lower():
-                sanitized_value = ""
-                print("Sanitized webhook URL from JSON key")
+            if isinstance(key, str):
+                if "webhook" in key.lower():
+                    sanitized_value = ""
+                    print("Sanitized webhook URL from JSON key")
+                elif key == "github_token" or "github" in key.lower() and "token" in key.lower():
+                    sanitized_value = ""
+                    print("Sanitized GitHub token from JSON key")
+                else:
+                    sanitized_value = sanitize_json_for_export(value)
             else:
                 sanitized_value = sanitize_json_for_export(value)
+                
             result[sanitized_key] = sanitized_value
             
         # Special handling for ComfyUI workflow structure
@@ -135,18 +316,104 @@ def sanitize_json_for_export(json_data):
             if isinstance(nodes, dict):
                 for node_id, node in nodes.items():
                     if isinstance(node, dict):
-                        # Check inputs
+                        # Check inputs for sensitive data
                         if "inputs" in node and isinstance(node["inputs"], dict):
                             for input_key, input_val in node["inputs"].items():
                                 if input_key == "webhook_url":
                                     node["inputs"][input_key] = ""
                                     print("Sanitized webhook URL from node inputs")
+                                elif input_key == "github_token":
+                                    node["inputs"][input_key] = ""
+                                    print("Sanitized GitHub token from node inputs")
+                        
+                        # Check widgets_values for sensitive data
+                        if "widgets_values" in node and isinstance(node["widgets_values"], list):
+                            # Check if this might be a Discord or GitHub node by its type
+                            is_sensitive_node = False
+                            if "type" in node and isinstance(node["type"], str):
+                                if ("Discord" in node["type"] or "discord" in node["type"] or 
+                                    "webhook" in node["type"].lower() or "github" in node["type"].lower()):
+                                    is_sensitive_node = True
+                            
+                            # Check all widget values for sensitive data
+                            for i, value in enumerate(node["widgets_values"]):
+                                if isinstance(value, str):
+                                    # Check for Discord webhook URLs
+                                    if "discord.com/api/webhooks" in value:
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized webhook URL from widgets_values[{i}]")
+                                    elif value.startswith("http") and ("webhook" in value.lower() or "discord" in value.lower()):
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized potential webhook URL from widgets_values[{i}]")
+                                    # Check for GitHub tokens
+                                    elif (value.startswith("ghp_") or      # GitHub personal access token
+                                          value.startswith("github_pat_") or  # GitHub personal access token
+                                          value.startswith("gho_") or      # GitHub OAuth token
+                                          value.startswith("ghs_") or      # GitHub service token
+                                          value.startswith("ghu_")):       # GitHub user-to-server token
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized GitHub token from widgets_values[{i}]")
+                                    # Check for generic tokens in GitHub-related nodes
+                                    elif len(value) >= 40 and "github" in node.get("type", "").lower() and any(c.isalnum() for c in value):
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized potential GitHub token from widgets_values[{i}]")
+            elif isinstance(nodes, list):
+                for node in nodes:
+                    if isinstance(node, dict):
+                        # Check inputs for sensitive data
+                        if "inputs" in node and isinstance(node["inputs"], dict):
+                            for input_key, input_val in node["inputs"].items():
+                                if input_key == "webhook_url":
+                                    node["inputs"][input_key] = ""
+                                    print("Sanitized webhook URL from node inputs")
+                                elif input_key == "github_token":
+                                    node["inputs"][input_key] = ""
+                                    print("Sanitized GitHub token from node inputs")
+                        
+                        # Also check widgets_values for sensitive data
+                        if "widgets_values" in node and isinstance(node["widgets_values"], list):
+                            # Check if this might be a Discord or GitHub node by its type
+                            is_sensitive_node = False
+                            if "type" in node and isinstance(node["type"], str):
+                                if ("Discord" in node["type"] or "discord" in node["type"] or 
+                                    "webhook" in node["type"].lower() or "github" in node["type"].lower()):
+                                    is_sensitive_node = True
+                            
+                            # Check all widget values for sensitive data
+                            for i, value in enumerate(node["widgets_values"]):
+                                if isinstance(value, str):
+                                    # Check for Discord webhook URLs
+                                    if "discord.com/api/webhooks" in value:
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized webhook URL from widgets_values[{i}]")
+                                    elif value.startswith("http") and ("webhook" in value.lower() or "discord" in value.lower()):
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized potential webhook URL from widgets_values[{i}]")
+                                    # Check for GitHub tokens
+                                    elif (value.startswith("ghp_") or      # GitHub personal access token
+                                          value.startswith("github_pat_") or  # GitHub personal access token
+                                          value.startswith("gho_") or      # GitHub OAuth token
+                                          value.startswith("ghs_") or      # GitHub service token
+                                          value.startswith("ghu_")):       # GitHub user-to-server token
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized GitHub token from widgets_values[{i}]")
+                                    # Check for generic tokens in GitHub-related nodes
+                                    elif len(value) >= 40 and "github" in node.get("type", "").lower() and any(c.isalnum() for c in value):
+                                        node["widgets_values"][i] = ""
+                                        print(f"Sanitized potential GitHub token from widgets_values[{i}]")
+                                        
+        # Check for top-level sensitive fields
+        if "webhook_url" in result:
+            result["webhook_url"] = ""
+            print("Sanitized top-level webhook URL")
+        if "github_token" in result:
+            result["github_token"] = ""
+            print("Sanitized top-level GitHub token")
+            
         return result
         
     elif isinstance(json_data, list):
         return [sanitize_json_for_export(item) for item in json_data]
-    
-    return json_data
 
 # Function to validate video files for Discord compatibility
 def validate_video_for_discord(file_path):
@@ -253,8 +520,8 @@ class DiscordSendSaveVideo:
                                "- video/prores: Apple ProRes (professional quality, supports audio when saving locally but NO AUDIO when sending to Discord, requires QuickTime or specialized player to view on Windows)"
                 }),
                 "frame_rate": (
-                    "INT", 
-                    {"default": 8, "min": 1, "max": 120, "step": 1, "tooltip": "Frames per second for the output video."}
+                    "FLOAT", 
+                    {"default": 8.0, "min": 0.1, "max": 120.0, "step": 0.1, "tooltip": "Frames per second for the output video. Values below 1 will make each image stay on screen longer (e.g., 0.5 = 2 seconds per frame)."}
                 ),
                 "quality": ("INT", {
                     "default": 85,
@@ -326,6 +593,29 @@ class DiscordSendSaveVideo:
                 "send_workflow_json": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Whether to send the workflow JSON alongside the video to Discord, allowing dragging the JSON into ComfyUI to restore the workflow."
+                }),
+                "save_cdn_urls": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Whether to save the Discord CDN URLs of the uploaded videos as a text file and attach it to the Discord message."
+                }),
+                "github_cdn_update": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Whether to update a GitHub repository with the Discord CDN URLs."
+                }),
+                "github_repo": ("STRING", {
+                    "default": "", 
+                    "multiline": False,
+                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo)."
+                }),
+                "github_token": ("STRING", {
+                    "default": "", 
+                    "multiline": False,
+                    "tooltip": "GitHub personal access token with repo permissions."
+                }),
+                "github_file_path": ("STRING", {
+                    "default": "cdn_urls.md", 
+                    "multiline": False,
+                    "tooltip": "Path to the file within the GitHub repository to update with CDN URLs."
                 })
             },
             "hidden": {
@@ -350,12 +640,13 @@ class DiscordSendSaveVideo:
         }
 
     def save_video(self, images, filename_prefix="ComfyUI-Video", overwrite_last="disable",
-                   format="video/h264-mp4", frame_rate=8, quality=85, loop_count=0, lossless=False, 
+                   format="video/h264-mp4", frame_rate=8.0, quality=85, loop_count=0, lossless=False, 
                    pingpong=False, save_output=True, audio=None,
                    add_date="enable", add_time="enable", add_dimensions="enable",
                    send_to_discord=False, webhook_url="", discord_message="",
-                   include_prompts_in_message=False, include_video_info=True, send_workflow_json=False, prompt=None, 
-                   extra_pnginfo=None, unique_id=None, **format_properties):
+                   include_prompts_in_message=False, include_video_info=True, send_workflow_json=False, 
+                   save_cdn_urls=False, github_cdn_update=False, github_repo="", github_token="", 
+                   github_file_path="cdn_urls.md", prompt=None, extra_pnginfo=None, unique_id=None, **format_properties):
         """
         Save image sequences as videos and optionally send to Discord.
         """
@@ -363,6 +654,9 @@ class DiscordSendSaveVideo:
         output_files = []
         discord_sent_files = []
         discord_send_success = True
+        
+        # For tracking Discord CDN URLs
+        discord_cdn_urls = []
         
         # Store original prompt for later processing but sanitize it for security
         original_prompt = prompt
@@ -1447,6 +1741,21 @@ class DiscordSendSaveVideo:
                 if response.status_code in [200, 204]:
                     discord_sent_files.append(discord_filename)  # Store the Discord UUID filename instead of local path
                     print(f"Successfully sent video to Discord with filename: {discord_filename}")
+                    
+                    # Try to extract CDN URL if available
+                    if save_cdn_urls and response.status_code == 200:
+                        try:
+                            response_data = response.json()
+                            # Discord webhook responses include attachments with URLs
+                            if "attachments" in response_data and isinstance(response_data["attachments"], list):
+                                for attachment in response_data["attachments"]:
+                                    if "url" in attachment and "filename" in attachment:
+                                        # Filter out workflow JSON files
+                                        if not attachment["filename"].endswith(".json"):
+                                            discord_cdn_urls.append((attachment["filename"], attachment["url"]))
+                                            print(f"Extracted CDN URL for video: {attachment['url']}")
+                        except Exception as e:
+                            print(f"Error extracting CDN URL from response: {e}")
                 else:
                     print(f"Discord API error: {response.status_code} - {response.text}")
                     discord_send_success = False
@@ -1454,6 +1763,72 @@ class DiscordSendSaveVideo:
             except Exception as e:
                 print(f"Error sending to Discord: {str(e)}")
                 discord_send_success = False
+                
+            # If we have CDN URLs and the option is enabled, send them as a text file
+            if save_cdn_urls and discord_cdn_urls:
+                try:
+                    # Create the text file content
+                    url_text_content = "# Discord CDN URLs\n\n"
+                    for idx, (filename, url) in enumerate(discord_cdn_urls):
+                        url_text_content += f"{idx+1}. {filename}: {url}\n"
+                    
+                    # Create a unique filename for the text file
+                    urls_filename = f"cdn_urls-{uuid4()}.txt"
+                    
+                    # Prepare the request with just the URL file
+                    url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
+                    url_data = {"content": "Discord CDN URLs for the uploaded videos:"}
+                    
+                    # Send a follow-up message with just the URLs text file
+                    url_response = requests.post(
+                        webhook_url,
+                        files=url_files,
+                        data=url_data
+                    )
+                    
+                    if url_response.status_code in [200, 204]:
+                        print(f"Successfully sent CDN URLs text file to Discord")
+                    else:
+                        print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
+                except Exception as e:
+                    print(f"Error creating or sending CDN URLs text file: {e}")
+        
+        # Update GitHub repository with CDN URLs if enabled
+        if github_cdn_update and send_to_discord and discord_cdn_urls:
+            # Use the collected CDN URLs for GitHub update
+            print(f"GitHub update is enabled with: repo={github_repo}, token_provided={'Yes' if github_token else 'No'}, file_path={github_file_path}")
+            print(f"Number of available CDN URLs to update GitHub: {len(discord_cdn_urls)}")
+            
+            if discord_cdn_urls:
+                # Call the GitHub update function
+                print(f"Updating GitHub repository {github_repo} with {len(discord_cdn_urls)} Discord CDN URLs...")
+                success, message = update_github_cdn_urls(
+                    github_repo=github_repo,
+                    github_token=github_token,
+                    file_path=github_file_path,
+                    cdn_urls=discord_cdn_urls
+                )
+                if success:
+                    print(f"GitHub update successful: {message}")
+                else:
+                    print(f"GitHub update failed: {message}")
+            else:
+                print("No CDN URLs available to update GitHub repository")
+        elif github_cdn_update:
+            # If GitHub update is enabled but not triggered, explain why
+            reasons = []
+            if not send_to_discord:
+                reasons.append("send_to_discord is disabled")
+            if not discord_cdn_urls:
+                reasons.append("no CDN URLs were collected (did Discord upload succeed?)")
+            if not github_repo:
+                reasons.append("github_repo is empty")
+            if not github_token:
+                reasons.append("github_token is empty")
+            if not github_file_path:
+                reasons.append("github_file_path is empty")
+            
+            print(f"GitHub update was enabled but not triggered because: {', '.join(reasons)}")
         
         # Check if any output files were created
         if len(output_files) == 0:
@@ -1489,11 +1864,12 @@ class DiscordSendSaveVideo:
 
     @classmethod
     def IS_CHANGED(s, images, filename_prefix="ComfyUI-Video", overwrite_last="disable",
-                  format="video/h264-mp4", frame_rate=8, quality=85, loop_count=0, lossless=False, 
+                  format="video/h264-mp4", frame_rate=8.0, quality=85, loop_count=0, lossless=False, 
                   pingpong=False, save_output=True, audio=None,
                   add_date="enable", add_time="enable", add_dimensions="enable",
                   send_to_discord=False, webhook_url="", discord_message="",
-                  include_prompts_in_message=False, include_video_info=True, send_workflow_json=False, prompt=None, 
-                  extra_pnginfo=None, unique_id=None, **format_properties):
+                  include_prompts_in_message=False, include_video_info=True, send_workflow_json=False, 
+                  save_cdn_urls=False, github_cdn_update=False, github_repo="", github_token="", 
+                  github_file_path="cdn_urls.md", prompt=None, extra_pnginfo=None, unique_id=None, **format_properties):
         # Always return True to ensure execution and proper handling of dynamic format properties
         return True 
