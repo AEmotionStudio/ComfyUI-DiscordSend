@@ -115,7 +115,7 @@ This comprehensive sanitization helps protect your Discord server's webhook toke
 
 The GitHub integration allows you to automatically save Discord CDN URLs to a GitHub repository.
 
-1. Create a personal access token with `repo` permissions on GitHub
+1. Create a personal access token with `public_repo` permissions on GitHub
 2. Configure the GitHub options in the node:
    - `github_cdn_update`: Enable to activate GitHub integration
    - `github_repo`: Your repository in format `username/repo`
@@ -300,7 +300,7 @@ The node formats messages with:
    - If you experience files overwriting each other, ensure multiple users aren't sharing the same output directory
 
 5. **GitHub Integration Issues**
-   - Verify your token has proper permissions (needs 'repo' scope)
+   - Verify your token has proper permissions (needs 'public_repo' scope)
    - Ensure the repository exists and you have write access
    - Check that the file path is valid and doesn't conflict with existing directories
 
