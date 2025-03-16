@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
-![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)
+![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 
 **Send your amazing AI-generated images and videos directly to Discord from ComfyUI!**
 
