@@ -4,7 +4,7 @@
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 
-**Send your amazing AI-generated images and videos directly to Discord from ComfyUI!**
+**Send your AI-generated images and videos directly to Discord from ComfyUI!**
 
 ComfyUI-DiscordSend provides custom nodes for ComfyUI that allow you to seamlessly:
 - Save images and videos locally with advanced formatting options
