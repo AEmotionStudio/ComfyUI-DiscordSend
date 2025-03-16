@@ -16,7 +16,7 @@ ComfyUI-DiscordSend provides custom nodes for ComfyUI that allow you to seamless
 > [!TIP]
 > Perfect for sharing your creations with communities, friends, or your own archive channels!
 
-![Example workflow](/images/nodes_example_2.png)
+![Example workflow](/images/nodes_example_3.png)
 
 ## ✨ Features
 
