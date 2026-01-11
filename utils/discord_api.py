@@ -7,10 +7,14 @@ Provides a client for interacting with Discord webhooks and validation utilities
 import os
 import re
 import time
+import logging
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+
+# Get logger for this module
+logger = logging.getLogger("comfyui_discordsend")
 
 
 # Discord webhook URL patterns
@@ -373,7 +377,7 @@ def send_to_discord_with_retry(
                     retry_after = response.json().get("retry_after", 1)
                 except:
                     pass
-                print(f"Rate limited by Discord, waiting {retry_after}s before retry...")
+                logger.warning(f"Rate limited by Discord, waiting {retry_after}s before retry...")
                 time.sleep(retry_after)
                 continue
             
@@ -382,13 +386,13 @@ def send_to_discord_with_retry(
                 return response
             
             # Server error - retry
-            print(f"Discord server error {response.status_code}, attempt {attempt + 1}/{max_retries}")
+            logger.warning(f"Discord server error {response.status_code}, attempt {attempt + 1}/{max_retries}")
             
         except requests.exceptions.Timeout:
-            print(f"Request timeout, attempt {attempt + 1}/{max_retries}")
+            logger.warning(f"Request timeout, attempt {attempt + 1}/{max_retries}")
             last_exception = requests.exceptions.Timeout("Discord request timed out")
         except requests.exceptions.RequestException as e:
-            print(f"Request error: {e}, attempt {attempt + 1}/{max_retries}")
+            logger.warning(f"Request error: {e}, attempt {attempt + 1}/{max_retries}")
             last_exception = e
         
         # Exponential backoff before retry
