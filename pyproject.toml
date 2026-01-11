@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-discordsend"
 description = "A ComfyUI extension that enables seamless sharing of AI-generated images and videos directly to Discord."
-version = "1.0.0"
+version = "1.1.0"
 license = {file = "LICENSE"}
 dependencies = ["requests>=2.25.0"]
 
