@@ -117,21 +117,49 @@ pip install -r requirements.txt  # Installs the minimal requirements (only the r
 
 ### Discord Webhook Setup
 
-#### Step 1: Access Webhook Settings
-1. In Discord, go to your server settings → Integrations → Webhooks
+<table>
+  <tr>
+    <td width="50%">
+      <h3>Step 1: Access Webhook Settings</h3>
+      <ol>
+        <li>In Discord, go to your server settings → Integrations → Webhooks</li>
+      </ol>
+    </td>
+    <td width="50%">
+       <img src="/images/discord_webhook_step1.png" alt="Discord webhook settings" width="100%">
+    </td>
+  </tr>
+</table>
 
-![Discord webhook settings](/images/discord_webhook_step1.png)
+<table>
+  <tr>
+    <td width="50%">
+      <h3>Step 2: Create and Copy Webhook</h3>
+      <ol start="2">
+        <li>Create a New Webhook and copy the Webhook URL</li>
+      </ol>
+    </td>
+    <td width="50%">
+       <img src="/images/discord_webhook_step2.png" alt="Create webhook" width="100%">
+       <br/><br/>
+       <img src="/images/discord_webhook_step2_2.png" alt="Copy webhook" width="100%">
+    </td>
+  </tr>
+</table>
 
-#### Step 2: Create and Copy Webhook
-2. Create a New Webhook and copy the Webhook URL
-
-![Create and copy webhook](/images/discord_webhook_step2.png)
-![Create and copy webhook](/images/discord_webhook_step2_2.png)
-
-#### Step 3: Configure the Node
-3. Paste this URL into the "webhook_url" field in the DiscordSend nodes
-
-![Configure webhook in node](/images/discord_webhook_step4.png)
+<table>
+  <tr>
+    <td width="50%">
+      <h3>Step 3: Configure the Node</h3>
+      <ol start="3">
+        <li>Paste this URL into the "webhook_url" field in the DiscordSend nodes</li>
+      </ol>
+    </td>
+    <td width="50%">
+       <img src="/images/discord_webhook_step4.png" alt="Configure webhook in node" width="100%">
+    </td>
+  </tr>
+</table>
 
 <details>
 <summary><strong>🖼️ Image Node Options (Click to Expand)</strong></summary>
