@@ -23,7 +23,7 @@ import functools
 import server
 
 # Import shared utilities
-from utils import sanitize_json_for_export, update_github_cdn_urls
+from utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -174,7 +174,7 @@ class DiscordSendSaveVideo:
             "required": {
                 "images": ("IMAGE", {"tooltip": "The image sequence to save as video and/or send to Discord."}),
                 "filename_prefix": ("STRING", {"default": "ComfyUI-Video", "tooltip": "The prefix for the saved files."}),
-                "overwrite_last": (["enable", "disable"], {"default": "disable", "tooltip": "If enabled, will overwrite the last video instead of creating incrementing filenames."})
+                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last video instead of creating incrementing filenames."})
             },
             "optional": {
                 # Video format settings
@@ -229,16 +229,16 @@ class DiscordSendSaveVideo:
                 }),
                 
                 # Filename options
-                "add_date": (["enable", "disable"], {
-                    "default": "enable",
+                "add_date": ("BOOLEAN", {
+                    "default": True,
                     "tooltip": "Add the current date (YYYY-MM-DD) to filenames."
                 }),
-                "add_time": (["enable", "disable"], {
-                    "default": "enable",
+                "add_time": ("BOOLEAN", {
+                    "default": True,
                     "tooltip": "Add the current time (HH-MM-SS) to filenames. Do not disable when sending videos to Discord."
                 }),
-                "add_dimensions": (["enable", "disable"], {
-                    "default": "enable",
+                "add_dimensions": ("BOOLEAN", {
+                    "default": True,
                     "tooltip": "Add width and height dimensions to the filename (WxH format)."
                 }),
                 
@@ -314,10 +314,10 @@ class DiscordSendSaveVideo:
         return {
         }
 
-    def save_video(self, images, filename_prefix="ComfyUI-Video", overwrite_last="disable",
+    def save_video(self, images, filename_prefix="ComfyUI-Video", overwrite_last=False,
                    format="video/h264-mp4", frame_rate=8.0, quality=85, loop_count=0, lossless=False, 
                    pingpong=False, save_output=True, audio=None,
-                   add_date="enable", add_time="enable", add_dimensions="enable",
+                   add_date=True, add_time=True, add_dimensions=True,
                    send_to_discord=False, webhook_url="", discord_message="",
                    include_prompts_in_message=False, include_video_info=True, send_workflow_json=False, 
                    save_cdn_urls=False, github_cdn_update=False, github_repo="", github_token="", 
@@ -367,14 +367,14 @@ class DiscordSendSaveVideo:
         # Video info for Discord message
         video_info = {}
         
-        if add_date == "enable":
+        if add_date:
             # Get ONLY the date in YYYY-MM-DD format
             current_date = time.strftime("%Y-%m-%d")
             date_time_parts.append(current_date)
             print(f"Adding date to filename: {current_date}")
             video_info["date"] = current_date
             
-        if add_time == "enable":
+        if add_time:
             # Get ONLY the time in HH-MM-SS format
             current_time = time.strftime("%H-%M-%S")
             date_time_parts.append(current_time)
@@ -382,7 +382,7 @@ class DiscordSendSaveVideo:
             video_info["time"] = current_time
             
         # Add dimensions if enabled
-        if add_dimensions == "enable":
+        if add_dimensions:
             # Get dimensions from first frame
             height, width = images[0].shape[0], images[0].shape[1]
             dim_text = f"{width}x{height}"
@@ -418,7 +418,7 @@ class DiscordSendSaveVideo:
             filename_prefix, dest_folder, images[0].shape[1], images[0].shape[0])
             
         # For overwrite functionality
-        if overwrite_last == "enable":
+        if overwrite_last:
             counter = 1  # Always use the same counter value for overwriting
             print("Overwrite mode enabled: will overwrite last video with same name")
         
@@ -981,15 +981,15 @@ class DiscordSendSaveVideo:
                 # Only build video metadata text if the option is enabled
                 if include_video_info:
                     # Add date if enabled
-                    if add_date == "enable" and "date" in video_info:
+                    if add_date and "date" in video_info:
                         video_metadata_text += f"**Date**: {video_info['date']}\n"
                     
                     # Add time if enabled
-                    if add_time == "enable" and "time" in video_info:
+                    if add_time and "time" in video_info:
                         video_metadata_text += f"**Time**: {video_info['time']}\n"
                     
                     # Add dimensions if enabled
-                    if add_dimensions == "enable" and "dimensions" in video_info:
+                    if add_dimensions and "dimensions" in video_info:
                         video_metadata_text += f"**Dimensions**: {video_info['dimensions']}\n"
                     
                     # Add frame rate information
@@ -1405,8 +1405,8 @@ class DiscordSendSaveVideo:
                     json_filename = f"{uuid4()}.json"
                     files.append(('workflow', (json_filename, workflow_file.getvalue(), 'application/json')))
                 
-                # Send to Discord
-                response = requests.post(
+                # Send to Discord with retry logic
+                response = send_to_discord_with_retry(
                     webhook_url,
                     data=discord_data,
                     files=files
@@ -1455,7 +1455,7 @@ class DiscordSendSaveVideo:
                     url_data = {"content": "Discord CDN URLs for the uploaded videos:"}
                     
                     # Send a follow-up message with just the URLs text file
-                    url_response = requests.post(
+                    url_response = send_to_discord_with_retry(
                         webhook_url,
                         files=url_files,
                         data=url_data
@@ -1538,10 +1538,10 @@ class DiscordSendSaveVideo:
         return {"ui": {"videos": [preview]}, "result": (final_output_path,)}
 
     @classmethod
-    def IS_CHANGED(s, images, filename_prefix="ComfyUI-Video", overwrite_last="disable",
+    def IS_CHANGED(s, images, filename_prefix="ComfyUI-Video", overwrite_last=False,
                   format="video/h264-mp4", frame_rate=8.0, quality=85, loop_count=0, lossless=False, 
                   pingpong=False, save_output=True, audio=None,
-                  add_date="enable", add_time="enable", add_dimensions="enable",
+                  add_date=True, add_time=True, add_dimensions=True,
                   send_to_discord=False, webhook_url="", discord_message="",
                   include_prompts_in_message=False, include_video_info=True, send_workflow_json=False, 
                   save_cdn_urls=False, github_cdn_update=False, github_repo="", github_token="", 

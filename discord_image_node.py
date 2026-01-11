@@ -17,7 +17,12 @@ from uuid import uuid4
 from typing import Any, Union, List, Optional
 
 # Import shared utilities
-from utils import sanitize_json_for_export, update_github_cdn_urls, extract_prompts_from_workflow
+from utils import (
+    sanitize_json_for_export, 
+    update_github_cdn_urls, 
+    extract_prompts_from_workflow,
+    send_to_discord_with_retry
+)
 
 
 # Helper function to convert tensor to OpenCV format
@@ -46,7 +51,7 @@ class DiscordSendSaveImage:
             "required": {
                 "images": ("IMAGE", {"tooltip": "The images to save and/or send to Discord."}),
                 "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files."}),
-                "overwrite_last": (["enable", "disable"], {"default": "disable", "tooltip": "If enabled, will overwrite the last image instead of creating incrementing filenames."})
+                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last image instead of creating incrementing filenames."})
             },
             "optional": {
                 "file_format": (["png", "jpeg", "webp"], {
@@ -72,20 +77,20 @@ class DiscordSendSaveImage:
                     "default": True,
                     "tooltip": "Whether to show image previews in the UI. Disable to reduce UI clutter for large batches."
                 }),
-                "add_date": (["enable", "disable"], {
-                    "default": "disable",
+                "add_date": ("BOOLEAN", {
+                    "default": False,
                     "tooltip": "Add the current date (YYYY-MM-DD) to filenames."
                 }),
-                "add_time": (["enable", "disable"], {
-                    "default": "disable",
+                "add_time": ("BOOLEAN", {
+                    "default": False,
                     "tooltip": "Add the current time (HH-MM-SS) to filenames."
                 }),
-                "add_dimensions": (["enable", "disable"], {
-                    "default": "disable",
+                "add_dimensions": ("BOOLEAN", {
+                    "default": False,
                     "tooltip": "Add width and height dimensions to the filename (WxH format)."
                 }),
-                "resize_to_power_of_2": (["enable", "disable"], {
-                    "default": "disable",
+                "resize_to_power_of_2": ("BOOLEAN", {
+                    "default": False,
                     "tooltip": "Resize images to nearest power of 2 dimensions (useful for textures in game engines)."
                 }),
                 "resize_method": (["nearest-exact", "bilinear", "bicubic", "lanczos", "box"], {
@@ -166,9 +171,9 @@ class DiscordSendSaveImage:
             "Hide Preview": lambda self, **kwargs: {"show_preview": False},
         }
 
-    def save_images(self, images, filename_prefix="ComfyUI-Image", overwrite_last="disable", 
-                   file_format="png", quality=95, lossless=True, add_date="disable", add_time="disable", 
-                   add_dimensions="disable", resize_to_power_of_2="disable", save_output=True, 
+    def save_images(self, images, filename_prefix="ComfyUI-Image", overwrite_last=False, 
+                   file_format="png", quality=95, lossless=True, add_date=False, add_time=False, 
+                   add_dimensions=False, resize_to_power_of_2=False, save_output=True, 
                    resize_method="lanczos", show_preview=True, send_to_discord=False, webhook_url="", discord_message="",
                    include_prompts_in_message=False, include_format_in_message=False, send_workflow_json=False, 
                    group_batched_images=True, save_cdn_urls=False, github_cdn_update=False, github_repo="", 
@@ -247,14 +252,14 @@ class DiscordSendSaveImage:
         # Prepare info for Discord message
         image_info = {}
         
-        if add_date == "enable":
+        if add_date:
             # Get ONLY the date in YYYY-MM-DD format
             current_date = time.strftime("%Y-%m-%d")
             date_time_parts.append(current_date)
             print(f"Adding date to filename: {current_date}")
             image_info["date"] = current_date
             
-        if add_time == "enable":
+        if add_time:
             # Get ONLY the time in HH-MM-SS format
             current_time = time.strftime("%H-%M-%S")
             date_time_parts.append(current_time)
@@ -360,7 +365,7 @@ class DiscordSendSaveImage:
             print("Discord integration was enabled but no webhook URL was provided")
         
         # Add image info to Discord message if relevant options are enabled
-        if send_to_discord and webhook_url and (add_date == "enable" or add_time == "enable" or add_dimensions == "enable" or resize_to_power_of_2 == "enable" or include_format_in_message):
+        if send_to_discord and webhook_url and (add_date or add_time or add_dimensions or resize_to_power_of_2 or include_format_in_message):
             info_message = "\n\n**Image Information:**\n"
             
             if "date" in image_info:
@@ -702,8 +707,8 @@ class DiscordSendSaveImage:
                             
                             # Only send to Discord if not batching
                             if not group_batched_images:
-                                # Send to Discord
-                                response = requests.post(
+                                # Send to Discord with retry logic
+                                response = send_to_discord_with_retry(
                                     webhook_url,
                                     files=files,
                                     data=data
@@ -754,7 +759,7 @@ class DiscordSendSaveImage:
                                                         url_data = {"content": "Discord CDN URLs for the uploaded images:"}
                                                         
                                                         # Send a follow-up message with just the URLs text file
-                                                        url_response = requests.post(
+                                                        url_response = send_to_discord_with_retry(
                                                             webhook_url,
                                                             files=url_files,
                                                             data=url_data
@@ -810,7 +815,7 @@ class DiscordSendSaveImage:
                         url_data = {"content": "Discord CDN URLs for the uploaded images:"}
                         
                         # Send a follow-up message with just the URLs text file
-                        url_response = requests.post(
+                        url_response = send_to_discord_with_retry(
                             webhook_url,
                             files=url_files,
                             data=url_data
@@ -853,8 +858,8 @@ class DiscordSendSaveImage:
                     except Exception as e:
                         print(f"Error preparing workflow JSON for batch: {e}")
                 
-                # Send the batch to Discord
-                response = requests.post(
+                # Send the batch to Discord with retry logic
+                response = send_to_discord_with_retry(
                     webhook_url,
                     files=files,
                     data=batch_discord_data
@@ -904,7 +909,7 @@ class DiscordSendSaveImage:
                                         url_data = {"content": "Discord CDN URLs for the uploaded images:"}
                                         
                                         # Send a follow-up message with just the URLs text file
-                                        url_response = requests.post(
+                                        url_response = send_to_discord_with_retry(
                                             webhook_url,
                                             files=url_files,
                                             data=url_data
@@ -972,9 +977,9 @@ class DiscordSendSaveImage:
             return {"ui": {}, "result": ((save_output, output_files, discord_send_success if send_to_discord else None),)}, output_files[0] if output_files else ""
 
     @classmethod
-    def IS_CHANGED(s, images, filename_prefix="ComfyUI-Image", overwrite_last="disable", 
-                  file_format="png", quality=95, lossless=True, add_date="disable", add_time="disable", 
-                  add_dimensions="disable", resize_to_power_of_2="disable", save_output=True, 
+    def IS_CHANGED(s, images, filename_prefix="ComfyUI-Image", overwrite_last=False, 
+                  file_format="png", quality=95, lossless=True, add_date=False, add_time=False, 
+                  add_dimensions=False, resize_to_power_of_2=False, save_output=True, 
                   resize_method="lanczos", show_preview=True, send_to_discord=False, webhook_url="", discord_message="",
                   include_prompts_in_message=False, include_format_in_message=False, group_batched_images=True, 
                   send_workflow_json=False, save_cdn_urls=False, github_cdn_update=False, github_repo="", 

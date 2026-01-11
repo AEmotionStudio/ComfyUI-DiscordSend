@@ -312,3 +312,94 @@ def validate_file_for_discord(file_path: str) -> Tuple[bool, str]:
         return True, f"Valid {ext.upper()} file for Discord"
     else:
         return False, f"Format {ext} may not be fully supported by Discord"
+
+
+def send_to_discord_with_retry(
+    webhook_url: str,
+    files: Optional[List] = None,
+    data: Optional[Dict] = None,
+    json_data: Optional[Dict] = None,
+    max_retries: int = 3,
+    timeout: int = 60
+) -> requests.Response:
+    """
+    Send a request to Discord webhook with retry logic.
+    
+    This is a drop-in replacement for requests.post() with added retry logic,
+    rate limit handling, and exponential backoff.
+    
+    Args:
+        webhook_url: The Discord webhook URL
+        files: Files to upload (same format as requests.post)
+        data: Form data (same format as requests.post)
+        json_data: JSON data (same format as requests.post)
+        max_retries: Maximum number of retry attempts
+        timeout: Request timeout in seconds
+        
+    Returns:
+        The response object from the successful request
+        
+    Raises:
+        requests.exceptions.RequestException: If all retries fail
+    """
+    last_exception = None
+    
+    for attempt in range(max_retries):
+        try:
+            if files:
+                response = requests.post(
+                    webhook_url,
+                    files=files,
+                    data=data,
+                    timeout=timeout
+                )
+            elif json_data:
+                response = requests.post(
+                    webhook_url,
+                    json=json_data,
+                    timeout=timeout
+                )
+            else:
+                response = requests.post(
+                    webhook_url,
+                    data=data,
+                    timeout=timeout
+                )
+            
+            # Handle rate limiting
+            if response.status_code == 429:
+                retry_after = 1
+                try:
+                    retry_after = response.json().get("retry_after", 1)
+                except:
+                    pass
+                print(f"Rate limited by Discord, waiting {retry_after}s before retry...")
+                time.sleep(retry_after)
+                continue
+            
+            # Success or client error (don't retry client errors)
+            if response.status_code < 500:
+                return response
+            
+            # Server error - retry
+            print(f"Discord server error {response.status_code}, attempt {attempt + 1}/{max_retries}")
+            
+        except requests.exceptions.Timeout:
+            print(f"Request timeout, attempt {attempt + 1}/{max_retries}")
+            last_exception = requests.exceptions.Timeout("Discord request timed out")
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}, attempt {attempt + 1}/{max_retries}")
+            last_exception = e
+        
+        # Exponential backoff before retry
+        if attempt < max_retries - 1:
+            wait_time = 2 ** attempt
+            time.sleep(wait_time)
+    
+    # If we get here, all retries failed
+    if last_exception:
+        raise last_exception
+    
+    # Return the last response even if it was an error
+    return response
+
