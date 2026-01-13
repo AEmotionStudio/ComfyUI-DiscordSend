@@ -27,6 +27,15 @@ try:
     import bot.cogs.generate
     print("✅ bot.cogs.generate imported")
     
+    import bot.services.permissions
+    print("✅ bot.services.permissions imported")
+    
+    import bot.cogs.queue
+    print("✅ bot.cogs.queue imported")
+    
+    import bot.cogs.admin
+    print("✅ bot.cogs.admin imported")
+    
     import bot.bot
     print("✅ bot.bot imported")
     

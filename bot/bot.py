@@ -41,6 +41,7 @@ class ComfyUIBot(commands.Bot):
         # Services
         from .services.delivery import DeliveryService
         from .services.job_manager import JobManager
+        from .services.permissions import PermissionService
         
         self.delivery_service = DeliveryService(self, self.comfy_client)
         self.job_manager = JobManager(
@@ -49,6 +50,7 @@ class ComfyUIBot(commands.Bot):
             self.comfy_ws, 
             self.delivery_service
         )
+        self.permission_service = PermissionService(self.repository)
         
     async def setup_hook(self):
         """Async setup before bot starts."""
@@ -86,10 +88,10 @@ class ComfyUIBot(commands.Bot):
         # Extensions to load
         extensions = [
             "bot.cogs.generate",
-            # "bot.cogs.queue",
+            "bot.cogs.queue",
             # "bot.cogs.templates",
             # "bot.cogs.history",
-            # "bot.cogs.admin",
+            "bot.cogs.admin",
         ]
         
         for ext in extensions:
