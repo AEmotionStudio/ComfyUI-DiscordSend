@@ -45,6 +45,12 @@ class AdminCog(commands.Cog):
             return
 
         try:
+            # Ensure server exists in DB
+            await self.bot.repository.get_or_create_server(
+                str(interaction.guild.id), 
+                interaction.guild.name
+            )
+
             await self.bot.repository.set_server_role(
                 server_discord_id=str(interaction.guild.id),
                 role_discord_id=str(role.id),

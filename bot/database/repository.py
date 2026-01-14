@@ -474,7 +474,9 @@ class Repository:
         """Update job status."""
         async with self.async_session() as session:
             result = await session.execute(
-                select(Job).where(Job.prompt_id == prompt_id)
+                select(Job)
+                .options(selectinload(Job.user))
+                .where(Job.prompt_id == prompt_id)
             )
             job = result.scalar_one_or_none()
             if not job:

@@ -47,6 +47,22 @@ class JobManager:
                          delivery_type: str = "channel") -> Job:
         """Submit a job to ComfyUI and database."""
         
+        # 0. Validate and ensure entities exist
+        user = await self.repo.get_or_create_user(user_discord_id, "Unknown")
+        
+        # Check queue limit
+        current_queue_count = await self.repo.count_user_pending_jobs(user_discord_id, server_discord_id)
+        
+        # Get server specific limit or default
+        max_queue = 3
+        if server_discord_id:
+            server = await self.repo.get_server(server_discord_id)
+            if server:
+                max_queue = server.max_queue_per_user
+                
+        if current_queue_count >= max_queue:
+            raise ValueError(f"Queue limit reached ({max_queue} jobs). Please wait for your current jobs to finish.")
+
         # 1. Submit to ComfyUI
         response = await self.client.queue_prompt(workflow, self.client_id)
         prompt_id = response.get("prompt_id")
