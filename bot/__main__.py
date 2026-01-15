@@ -24,7 +24,7 @@ def main():
         logger.critical(f"Failed to load configuration: {e}")
         return
 
-    if not config.discord_token:
+    if not config.discord.token:
         logger.critical("Discord token not found! Set DISCORDBOT_DISCORD_TOKEN env var or config.yaml")
         return
 
@@ -32,7 +32,7 @@ def main():
     bot = ComfyUIBot(config)
     
     try:
-        bot.run(config.discord_token)
+        bot.run(config.discord.token)
     except KeyboardInterrupt:
         logger.info("Bot stopped by user.")
     except Exception as e:

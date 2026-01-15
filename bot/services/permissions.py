@@ -74,8 +74,9 @@ class PermissionService:
 def require_permission(level: str):
     async def predicate(interaction: discord.Interaction):
         if not interaction.guild:
-            return True # DMs are always allowed/handled differently? Or restrict? 
-                        # For now, let's assume commands needing permissions are guild-only.
+            await interaction.response.send_message("⛔ This command cannot be used in DMs.", ephemeral=True)
+            return False
+        
         
         # We need to access the bot instance to get the permission service
         bot = interaction.client
