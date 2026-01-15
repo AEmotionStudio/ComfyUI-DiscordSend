@@ -11,6 +11,7 @@ import logging
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
+import json
 import requests
 
 # Get logger for this module
@@ -216,7 +217,7 @@ class DiscordWebhookClient:
                 if files:
                     response = requests.post(
                         self.webhook_url,
-                        data={"payload_json": str(data)} if data else None,
+                        data={"payload_json": json.dumps(data)} if data else None,
                         files=files,
                         timeout=60
                     )
@@ -408,4 +409,3 @@ def send_to_discord_with_retry(
     
     # Return the last response even if it was an error
     return response
-

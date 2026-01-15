@@ -17,7 +17,7 @@ from uuid import uuid4
 from typing import Any, Union, List, Optional
 
 # Import shared utilities
-from utils import (
+from discordsend_utils import (
     sanitize_json_for_export, 
     update_github_cdn_urls, 
     extract_prompts_from_workflow,
@@ -63,7 +63,7 @@ class DiscordSendSaveImage:
                     "min": 1, 
                     "max": 100,
                     "step": 1,
-                    "tooltip": "Quality for JPEG/WebP formats (1-100). Higher is better quality but larger file size."
+                    "tooltip": "Quality (1-100) for JPEG/WebP. Ignored for PNG. Higher values = better quality but larger file size."
                 }),
                 "lossless": ("BOOLEAN", {
                     "default": True,
@@ -104,12 +104,12 @@ class DiscordSendSaveImage:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Discord webhook URL to send images to. Leave empty to disable Discord integration."
+                    "tooltip": "Discord webhook URL (from Server Settings > Integrations > Webhooks). Leave empty to disable Discord integration."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
                     "multiline": True,
-                    "tooltip": "Optional message to send with the Discord images."
+                    "tooltip": "Optional text to display with the image. Supports Discord Markdown (bold, italic, etc.)."
                 }),
                 "include_prompts_in_message": ("BOOLEAN", {
                     "default": False,
@@ -580,54 +580,53 @@ class DiscordSendSaveImage:
                 # Send to Discord if enabled
                 if send_to_discord and webhook_url:
                     try:
-                        # Prepare the image for Discord - use the resized PIL image (img) instead of original tensor
-                        img_cv = np.array(img)
-                        
-                        # Convert RGB (PIL) to BGR (OpenCV) if needed
-                        if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
-                            img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
-                        
-                        # Handle color conversion for special cases
-                        if len(img_cv.shape) == 2:  # Grayscale
-                            img_cv = cv2.cvtColor(img_cv, cv2.COLOR_GRAY2BGR)
-                        elif len(img_cv.shape) == 3 and img_cv.shape[2] == 4:  # RGBA
-                            img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGBA2BGRA)
-                        
                         # Generate unique filename for Discord using the selected format
                         discord_filename = f"{uuid4()}.{file_format}"
+                        file_bytes = BytesIO()
+
+                        # Optimization: Use PIL directly for JPEG/WebP to avoid numpy conversion overhead
+                        # Use CV2 for PNG as it is significantly faster for that format
                         
-                        # Encode image using the selected format
                         if file_format == "png":
+                            # Use CV2 for PNG
+                            img_cv = np.array(img)
+
+                            # Convert RGB (PIL) to BGR (OpenCV)
+                            if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
+                                img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+
+                            # Handle color conversion for special cases
+                            if len(img_cv.shape) == 2:  # Grayscale
+                                img_cv = cv2.cvtColor(img_cv, cv2.COLOR_GRAY2BGR)
+                            elif len(img_cv.shape) == 3 and img_cv.shape[2] == 4:  # RGBA
+                                img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGBA2BGRA)
+
                             _, buffer = cv2.imencode('.png', img_cv)
+                            file_bytes = BytesIO(buffer)
+
                         elif file_format == "jpeg":
-                            # JPEG is always lossy, but we can set quality to maximum if lossless is requested
                             jpeg_quality = 100 if lossless else quality
-                            encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
-                            _, buffer = cv2.imencode('.jpg', img_cv, encode_params)
+                            # JPEG does not support RGBA, convert to RGB if needed
+                            save_img = img
+                            if save_img.mode == 'RGBA':
+                                save_img = save_img.convert('RGB')
+                            save_img.save(file_bytes, format="JPEG", quality=jpeg_quality)
+                            file_bytes.seek(0)
+
                         elif file_format == "webp":
                             try:
                                 if lossless:
-                                    # For lossless WebP - using explicit parameter value as the constant may not be defined
-                                    # cv2.IMWRITE_WEBP_LOSSLESS is 9 in OpenCV
-                                    encode_params = [int(cv2.IMWRITE_WEBP_QUALITY), 100]  # First ensure high quality
-                                    encode_params.extend([9, 1])  # 9 is the parameter ID for WEBP_LOSSLESS, 1 means true
-                                    _, buffer = cv2.imencode('.webp', img_cv, encode_params)
-                                    
-                                    # If that fails, try alternative method
-                                    if buffer is None or len(buffer) == 0:
-                                        raise ValueError("WebP lossless encoding failed with direct method")
+                                    img.save(file_bytes, format="WEBP", lossless=True)
                                 else:
-                                    # For lossy WebP with quality parameter
-                                    encode_params = [int(cv2.IMWRITE_WEBP_QUALITY), quality]
-                                    _, buffer = cv2.imencode('.webp', img_cv, encode_params)
+                                    img.save(file_bytes, format="WEBP", quality=quality)
+                                file_bytes.seek(0)
                             except Exception as e:
                                 print(f"Error with WebP encoding for Discord: {e}, falling back to PNG")
-                                # Fallback to PNG if WebP encoding fails
-                                _, buffer = cv2.imencode('.png', img_cv)
-                                # Update filename to reflect the format change
+                                # Fallback to PNG if WebP encoding fails (using PIL)
                                 discord_filename = f"{os.path.splitext(discord_filename)[0]}.png"
-                        
-                        file_bytes = BytesIO(buffer)
+                                file_bytes = BytesIO() # Reset buffer
+                                img.save(file_bytes, format="PNG", compress_level=self.compress_level)
+                                file_bytes.seek(0)
                         
                         # If batch grouping is enabled, store the files for later
                         if group_batched_images:

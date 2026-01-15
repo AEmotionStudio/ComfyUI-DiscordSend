@@ -23,7 +23,7 @@ import functools
 import server
 
 # Import shared utilities
-from utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry
+from discordsend_utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -48,7 +48,7 @@ def cached(max_size=None):
 
 # Try to import dependencies from nodes.py
 try:
-    from utils import ffmpeg_path, get_audio, hash_path, validate_path, requeue_workflow, \
+    from discordsend_utils import ffmpeg_path, get_audio, hash_path, validate_path, requeue_workflow, \
             gifski_path, calculate_file_hash, strip_path, try_download_video, is_url, \
             imageOrLatent, BIGMAX, merge_filter_args, ENCODE_ARGS, floatOrInt
     from comfy.utils import ProgressBar
@@ -235,7 +235,7 @@ class DiscordSendSaveVideo:
                 }),
                 "add_time": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Add the current time (HH-MM-SS) to filenames. Do not disable when sending videos to Discord."
+                    "tooltip": "Add the current time (HH-MM-SS) to filenames. ⚠️ Recommended for Discord to avoid caching issues."
                 }),
                 "add_dimensions": ("BOOLEAN", {
                     "default": True,
@@ -250,12 +250,12 @@ class DiscordSendSaveVideo:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Discord webhook URL to send videos to. Leave empty to disable Discord integration."
+                    "tooltip": "Discord webhook URL (from Server Settings > Integrations > Webhooks). Leave empty to disable Discord integration."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
                     "multiline": True,
-                    "tooltip": "Optional message to send with the Discord videos."
+                    "tooltip": "Optional text to display with the video. Supports Discord Markdown (bold, italic, etc.)."
                 }),
                 "include_prompts_in_message": ("BOOLEAN", {
                     "default": False,

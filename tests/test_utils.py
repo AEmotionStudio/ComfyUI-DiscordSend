@@ -12,8 +12,8 @@ import unittest
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.sanitizer import sanitize_json_for_export
-from utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry
+from discordsend_utils.sanitizer import sanitize_json_for_export
+from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry
 from unittest.mock import patch, MagicMock
 
 
@@ -145,7 +145,7 @@ class TestSSRFPrevention(unittest.TestCase):
 
         self.assertIn("Invalid webhook URL", str(cm.exception))
 
-    @patch('requests.post')
+    @patch('discordsend_utils.discord_api.requests.post')
     def test_send_to_discord_allows_valid_url(self, mock_post):
         """Should allow valid Discord URLs."""
         valid_url = "https://discord.com/api/webhooks/123/abc"
