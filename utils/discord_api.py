@@ -45,10 +45,6 @@ def validate_webhook_url(url: str) -> Tuple[bool, str]:
         if re.match(pattern, url, re.IGNORECASE):
             return True, "Valid Discord webhook URL"
     
-    # More lenient check
-    if "discord" in url.lower() and "webhook" in url.lower():
-        return True, "Appears to be a Discord webhook URL"
-    
     return False, "URL does not appear to be a valid Discord webhook URL"
 
 
@@ -345,7 +341,13 @@ def send_to_discord_with_retry(
         
     Raises:
         requests.exceptions.RequestException: If all retries fail
+        ValueError: If the webhook URL is invalid
     """
+    # Validate URL to prevent SSRF
+    is_valid, error_msg = validate_webhook_url(webhook_url)
+    if not is_valid:
+        raise ValueError(f"Invalid webhook URL: {error_msg}")
+
     last_exception = None
     
     for attempt in range(max_retries):
