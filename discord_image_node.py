@@ -593,7 +593,13 @@ class DiscordSendSaveImage:
                             file_bytes = BytesIO()
                             # JPEG is always lossy, but we can set quality to maximum if lossless is requested
                             jpeg_quality = 100 if lossless else quality
-                            img.save(file_bytes, format="JPEG", quality=jpeg_quality)
+
+                            # Handle RGBA images for JPEG (which doesn't support alpha)
+                            img_to_save = img
+                            if img.mode == "RGBA":
+                                img_to_save = img.convert("RGB")
+
+                            img_to_save.save(file_bytes, format="JPEG", quality=jpeg_quality)
                             file_bytes.seek(0)
 
                         else:
