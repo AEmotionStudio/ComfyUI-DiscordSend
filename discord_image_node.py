@@ -63,7 +63,7 @@ class DiscordSendSaveImage:
                     "min": 1, 
                     "max": 100,
                     "step": 1,
-                    "tooltip": "Quality for JPEG/WebP formats (1-100). Higher is better quality but larger file size."
+                    "tooltip": "Quality (1-100) for JPEG/WebP. Ignored for PNG. Higher values = better quality but larger file size."
                 }),
                 "lossless": ("BOOLEAN", {
                     "default": True,
@@ -104,12 +104,12 @@ class DiscordSendSaveImage:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Discord webhook URL to send images to. Leave empty to disable Discord integration."
+                    "tooltip": "Discord webhook URL (from Server Settings > Integrations > Webhooks). Leave empty to disable Discord integration."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
                     "multiline": True,
-                    "tooltip": "Optional message to send with the Discord images."
+                    "tooltip": "Optional text to display with the image. Supports Discord Markdown (bold, italic, etc.)."
                 }),
                 "include_prompts_in_message": ("BOOLEAN", {
                     "default": False,
