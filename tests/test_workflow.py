@@ -135,6 +135,37 @@ class TestPromptExtractor(unittest.TestCase):
         self.assertEqual(pos, "a majestic eagle")
         self.assertEqual(neg, "ugly, deformed, mutated, extra fingers")
 
+    def test_extract_unrelated_text_nodes(self):
+        """Should ignore empty strings and pick lowest score as positive prompt."""
+        workflow = {
+            "6": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "embedding:bad-artist, EasyNegative, low quality"} # Score: 3
+            },
+            "7": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "   "} # Empty/Whitespace - Should be ignored
+            },
+            "8": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "v1-5-pruned-emaonly.safetensors"} # Unrelated - Score: 0 (or low)
+            },
+            "9": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "a beautiful forest, cinematic lighting"} # Target - Score: 0
+            }
+        }
+        
+        # In this case, node 8 and 9 both have score 0. 
+        # The logic picks the last one in the list (node 9).
+        # Node 7 should be completely ignored.
+        
+        # We need to ensure extraction finds the right pair
+        positive, negative = extract_prompts_from_workflow(workflow)
+        
+        self.assertEqual(negative, "embedding:bad-artist, EasyNegative, low quality")
+        self.assertEqual(positive, "a beautiful forest, cinematic lighting")
+
     def test_extract_single_prompt(self):
         """Should assume single CLIP node is positive."""
         api_data = {

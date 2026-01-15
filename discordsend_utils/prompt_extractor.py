@@ -48,10 +48,12 @@ def extract_prompts_from_workflow(workflow_data: Any) -> Tuple[Optional[str], Op
     negative_prompt = None
     
     # Find CLIPTextEncode nodes
-    if "nodes" not in data:
-        return None, None
+    if "nodes" in data:
+        nodes = data["nodes"]
+    else:
+        # Check if it's API format (dict of nodes)
+        nodes = data
     
-    nodes = data["nodes"]
     clip_nodes = _find_clip_text_encode_nodes(nodes)
     
     if not clip_nodes:
@@ -95,25 +97,28 @@ def _is_clip_text_encode(node: Any) -> bool:
     if not isinstance(node, dict):
         return False
     
-    if node.get("type") != "CLIPTextEncode":
+    # Handle both Workflow format (type) and API format (class_type)
+    node_type = node.get("type") or node.get("class_type")
+    if node_type != "CLIPTextEncode":
         return False
     
-    widgets = node.get("widgets_values", [])
-    if not isinstance(widgets, list) or len(widgets) == 0:
-        return False
-    
-    # Must have a string value at position 0
-    if not isinstance(widgets[0], str):
-        return False
-    
-    return True
+    # Check for text in either widgets_values (Workflow) or inputs (API)
+    text = _get_prompt_text(node)
+    return text is not None
 
 
 def _get_prompt_text(node: Dict) -> Optional[str]:
     """Extract the prompt text from a CLIP node."""
+    # Workflow format (widgets_values)
     widgets = node.get("widgets_values", [])
-    if widgets and isinstance(widgets[0], str):
+    if isinstance(widgets, list) and len(widgets) > 0 and isinstance(widgets[0], str):
         return widgets[0]
+        
+    # API format (inputs.text)
+    inputs = node.get("inputs", {})
+    if isinstance(inputs, dict) and isinstance(inputs.get("text"), str):
+        return inputs.get("text")
+        
     return None
 
 
@@ -132,15 +137,18 @@ def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Opti
     node_scores = []
     for node in clip_nodes:
         prompt_text = _get_prompt_text(node)
-        if prompt_text is None:
-            node_scores.append((node, 0, ""))
+        # Skip empty or None text
+        if not prompt_text or not prompt_text.strip():
             continue
             
         prompt_lower = prompt_text.lower()
         score = sum(1 for indicator in NEGATIVE_INDICATORS if indicator in prompt_lower)
         node_scores.append((node, score, prompt_text))
     
-    # Sort by score descending
+    if not node_scores:
+        return None, None
+
+    # Sort by score descending (highest score first for negative)
     node_scores.sort(key=lambda x: x[1], reverse=True)
     
     positive_prompt = None
@@ -149,11 +157,15 @@ def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Opti
     # Highest score is likely negative (if score > 0)
     if node_scores[0][1] > 0:
         negative_prompt = node_scores[0][2]
-        # The first node with score 0 (or the next lowest) is likely positive
-        for _, score, text in node_scores[1:]:
-            if positive_prompt is None:
-                positive_prompt = text
-                break
+        # The node with the lowest score is likely the positive prompt
+        # Since it's sorted descending, pick the last one
+        positive_prompt = node_scores[-1][2]
+        
+        # If we have more than 2 nodes and the last one is NOT the only zero-score node,
+        # we might need more logic, but for 2 nodes, this is correct.
+        # If positive and negative are the same (only 1 node with score > 0), clear positive.
+        if positive_prompt == negative_prompt:
+            positive_prompt = None
     else:
         # All scores are 0, use connection analysis
         positive_prompt, negative_prompt = _classify_by_connections(
