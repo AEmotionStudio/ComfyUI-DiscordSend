@@ -20,8 +20,8 @@ logger = logging.getLogger("comfyui_discordsend")
 
 # Discord webhook URL patterns
 WEBHOOK_URL_PATTERNS = [
-    r"https?://(?:www\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+",
-    r"https?://(?:www\.)?discordapp\.com/api/webhooks/\d+/[\w-]+",
+    r"https?://(?:www\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$",
+    r"https?://(?:www\.)?discordapp\.com/api/webhooks/\d+/[\w-]+$",
 ]
 
 

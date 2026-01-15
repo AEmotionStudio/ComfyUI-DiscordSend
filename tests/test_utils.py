@@ -131,6 +131,23 @@ class TestWebhookValidation(unittest.TestCase):
         is_valid, message = validate_webhook_url("http://localhost:8080/admin")
         self.assertFalse(is_valid)
 
+    def test_ip_encoding_urls(self):
+        """Should reject alternate IP encodings."""
+        self.assertFalse(validate_webhook_url("http://127.0.0.1")[0])
+        self.assertFalse(validate_webhook_url("http://0177.0.0.1")[0]) # Octal
+        self.assertFalse(validate_webhook_url("http://0x7f.0.0.1")[0]) # Hex
+        self.assertFalse(validate_webhook_url("http://[::1]")[0]) # IPv6
+
+    def test_domain_spoofing_urls(self):
+        """Should reject domains that contain 'discord' but aren't Discord."""
+        self.assertFalse(validate_webhook_url("https://discord.com.evil.co/api/webhooks/123/abc")[0])
+        self.assertFalse(validate_webhook_url("https://evil-discord.com/api/webhooks/123/abc")[0])
+
+    def test_path_traversal_urls(self):
+        """Should reject path traversal attempts."""
+        self.assertFalse(validate_webhook_url("https://discord.com/api/webhooks/123/abc/../../admin")[0])
+        self.assertFalse(validate_webhook_url("https://discord.com/api/webhooks/123/abc%2f..%2f..%2fadmin")[0])
+
 
 class TestSSRFPrevention(unittest.TestCase):
     """Tests for SSRF prevention mechanisms."""

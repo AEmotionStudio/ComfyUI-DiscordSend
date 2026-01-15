@@ -125,35 +125,41 @@ def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Opti
     1. Content analysis (negative prompts often contain quality-related terms)
     2. Connection analysis (traces connections to sampler nodes)
     """
-    positive_prompt = None
-    negative_prompt = None
-    
-    # First pass: content-based classification
+    if not clip_nodes:
+        return None, None
+        
+    # First pass: Score all nodes based on content
+    node_scores = []
     for node in clip_nodes:
         prompt_text = _get_prompt_text(node)
         if prompt_text is None:
+            node_scores.append((node, 0, ""))
             continue
-        
+            
         prompt_lower = prompt_text.lower()
-        
-        # Count negative indicators
-        negative_matches = sum(1 for indicator in NEGATIVE_INDICATORS if indicator in prompt_lower)
-        
-        if negative_matches >= 3:
-            # Likely a negative prompt
-            if negative_prompt is None:
-                negative_prompt = prompt_text
-        else:
-            # Assume positive
+        score = sum(1 for indicator in NEGATIVE_INDICATORS if indicator in prompt_lower)
+        node_scores.append((node, score, prompt_text))
+    
+    # Sort by score descending
+    node_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    positive_prompt = None
+    negative_prompt = None
+    
+    # Highest score is likely negative (if score > 0)
+    if node_scores[0][1] > 0:
+        negative_prompt = node_scores[0][2]
+        # The first node with score 0 (or the next lowest) is likely positive
+        for _, score, text in node_scores[1:]:
             if positive_prompt is None:
-                positive_prompt = prompt_text
-    
-    # Second pass: connection-based classification (if needed)
-    if positive_prompt is None or negative_prompt is None:
+                positive_prompt = text
+                break
+    else:
+        # All scores are 0, use connection analysis
         positive_prompt, negative_prompt = _classify_by_connections(
-            clip_nodes, workflow_data, positive_prompt, negative_prompt
+            clip_nodes, workflow_data, None, None
         )
-    
+        
     # Fallback: if we still can't determine, use first two nodes
     if positive_prompt is None and negative_prompt is None and len(clip_nodes) >= 2:
         # Convention: assume first is positive, second is negative
@@ -161,15 +167,13 @@ def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Opti
         negative_prompt = _get_prompt_text(clip_nodes[1])
     elif positive_prompt is None and negative_prompt is not None:
         # Find the other prompt
-        for node in clip_nodes:
-            text = _get_prompt_text(node)
+        for _, _, text in node_scores:
             if text != negative_prompt:
                 positive_prompt = text
                 break
     elif negative_prompt is None and positive_prompt is not None:
         # Find the other prompt
-        for node in clip_nodes:
-            text = _get_prompt_text(node)
+        for _, _, text in node_scores:
             if text != positive_prompt:
                 negative_prompt = text
                 break
