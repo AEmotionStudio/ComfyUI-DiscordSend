@@ -21,7 +21,8 @@ class JobManager:
         self.client = comfy_client
         self.ws = comfy_ws
         self.delivery = delivery_service
-        self.client_id = str(uuid.uuid4())
+        # Use common client_id from WebSocket
+        self.client_id = comfy_ws.client_id
         
         # In-memory mapping of prompt_id -> current status buffer
         self._active_jobs = {} 

@@ -58,6 +58,12 @@ class QueueCog(commands.Cog):
 
     async def _clear_queue(self, interaction: discord.Interaction):
         """Clear user's own pending jobs."""
+        # Check permission manually since it's a subcommand handler
+        has_perm = await self.bot.permission_service.check_permission(interaction.user, Permissions.GENERATOR.value)
+        if not has_perm:
+             await interaction.response.send_message("⛔ You need the **Generator** role to clear the queue.", ephemeral=True)
+             return
+
         await interaction.response.defer(ephemeral=True)
         
         # Get user's pending jobs
@@ -80,6 +86,7 @@ class QueueCog(commands.Cog):
 
     @app_commands.command(name="cancel", description="Cancel a specific job")
     @app_commands.describe(job_id="The ID of the job to cancel")
+    @require_permission(Permissions.GENERATOR.value)
     async def cancel(self, interaction: discord.Interaction, job_id: int):
         """Cancel a specific job by ID."""
         await interaction.response.defer(ephemeral=True)

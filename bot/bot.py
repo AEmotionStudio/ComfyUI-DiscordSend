@@ -34,9 +34,12 @@ class ComfyUIBot(commands.Bot):
         self.repository = Repository(config.database.url)
         
         
+        import uuid
+        self.client_id = str(uuid.uuid4())
+        
         # ComfyUI Clients
         self.comfy_client = ComfyUIClient(base_url=config.comfyui.url)
-        self.comfy_ws = ComfyUIWebSocket(base_url=config.comfyui.url)
+        self.comfy_ws = ComfyUIWebSocket(base_url=config.comfyui.url, client_id=self.client_id)
         
         # Services
         from .services.delivery import DeliveryService

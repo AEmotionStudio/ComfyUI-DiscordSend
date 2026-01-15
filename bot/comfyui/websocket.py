@@ -17,6 +17,7 @@ class ComfyUIWebSocket:
             base_url = base_url.replace("https://", "wss://")
             
         self.ws_url = f"{base_url.rstrip('/')}/ws"
+        self.client_id = client_id
         if client_id:
             self.ws_url += f"?clientId={client_id}"
             
