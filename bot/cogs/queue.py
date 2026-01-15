@@ -47,7 +47,8 @@ class QueueCog(commands.Cog):
         for i, job in enumerate(pending_jobs[:10]):
             status_icon = "🔄" if job.status == JobStatus.RUNNING.value else "⏳"
             user_mention = f"<@{job.user.discord_id}>"
-            prompt_preview = (job.positive_prompt[:40] + "...") if len(job.positive_prompt) > 40 else job.positive_prompt
+            prompt_text = job.positive_prompt or "No prompt provided"
+            prompt_preview = (prompt_text[:40] + "...") if len(prompt_text) > 40 else prompt_text
             desc_lines.append(f"`#{i+1}` {status_icon} **ID:{job.id}** {user_mention}: {prompt_preview}")
         
         if len(pending_jobs) > 10:
