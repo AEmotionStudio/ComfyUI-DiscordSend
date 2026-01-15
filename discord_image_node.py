@@ -17,7 +17,7 @@ from uuid import uuid4
 from typing import Any, Union, List, Optional
 
 # Import shared utilities
-from utils import (
+from discordsend_utils import (
     sanitize_json_for_export, 
     update_github_cdn_urls, 
     extract_prompts_from_workflow,

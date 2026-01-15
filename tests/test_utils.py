@@ -12,8 +12,8 @@ import unittest
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.sanitizer import sanitize_json_for_export
-from utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging
+from discordsend_utils.sanitizer import sanitize_json_for_export
+from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging
 
 
 class TestSanitizer(unittest.TestCase):

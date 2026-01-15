@@ -23,7 +23,7 @@ import functools
 import server
 
 # Import shared utilities
-from utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry
+from discordsend_utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -48,7 +48,7 @@ def cached(max_size=None):
 
 # Try to import dependencies from nodes.py
 try:
-    from utils import ffmpeg_path, get_audio, hash_path, validate_path, requeue_workflow, \
+    from discordsend_utils import ffmpeg_path, get_audio, hash_path, validate_path, requeue_workflow, \
             gifski_path, calculate_file_hash, strip_path, try_download_video, is_url, \
             imageOrLatent, BIGMAX, merge_filter_args, ENCODE_ARGS, floatOrInt
     from comfy.utils import ProgressBar
