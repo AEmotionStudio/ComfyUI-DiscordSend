@@ -11,6 +11,7 @@ import logging
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
+import json
 import requests
 
 # Get logger for this module
@@ -44,10 +45,6 @@ def validate_webhook_url(url: str) -> Tuple[bool, str]:
     for pattern in WEBHOOK_URL_PATTERNS:
         if re.match(pattern, url, re.IGNORECASE):
             return True, "Valid Discord webhook URL"
-    
-    # More lenient check
-    if "discord" in url.lower() and "webhook" in url.lower():
-        return True, "Appears to be a Discord webhook URL"
     
     return False, "URL does not appear to be a valid Discord webhook URL"
 
@@ -220,7 +217,7 @@ class DiscordWebhookClient:
                 if files:
                     response = requests.post(
                         self.webhook_url,
-                        data={"payload_json": str(data)} if data else None,
+                        data={"payload_json": json.dumps(data)} if data else None,
                         files=files,
                         timeout=60
                     )
@@ -345,7 +342,13 @@ def send_to_discord_with_retry(
         
     Raises:
         requests.exceptions.RequestException: If all retries fail
+        ValueError: If the webhook URL is invalid
     """
+    # Validate URL to prevent SSRF
+    is_valid, error_msg = validate_webhook_url(webhook_url)
+    if not is_valid:
+        raise ValueError(f"Invalid webhook URL: {error_msg}")
+
     last_exception = None
     
     for attempt in range(max_retries):
@@ -406,4 +409,3 @@ def send_to_discord_with_retry(
     
     # Return the last response even if it was an error
     return response
-
