@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from ..embeds.builders import EmbedBuilder
+from ..services.permissions import require_permission, Permissions
 from ...utils.workflow_builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class GenerateCog(commands.Cog):
         app_commands.Choice(name="Current Channel", value="channel"),
         app_commands.Choice(name="Direct Message", value="dm")
     ])
+    @require_permission(Permissions.USER.value)
     async def generate(self, interaction: discord.Interaction, 
                        prompt: str, 
                        negative_prompt: str = "", 
