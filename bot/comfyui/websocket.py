@@ -38,6 +38,8 @@ class ComfyUIWebSocket:
             logger.info(f"Connected to ComfyUI WebSocket at {self.ws_url}")
         except Exception as e:
             logger.error(f"Failed to connect to WebSocket: {e}")
+            if self.session and not self.session.closed:
+                await self.session.close()
             raise
 
     async def disconnect(self):
