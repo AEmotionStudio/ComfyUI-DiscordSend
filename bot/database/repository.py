@@ -493,7 +493,16 @@ class Repository:
                 job.error_message = error_message
 
             if output_images is not None:
-                job.output_images = json.dumps(output_images)
+                current_images = []
+                if job.output_images:
+                    try:
+                        current_images = json.loads(job.output_images)
+                    except json.JSONDecodeError:
+                        current_images = []
+                
+                # Append new images
+                current_images.extend(output_images)
+                job.output_images = json.dumps(current_images)
 
             await session.commit()
             return job

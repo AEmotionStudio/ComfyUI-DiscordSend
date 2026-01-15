@@ -25,6 +25,7 @@ class JobManager:
         
         # In-memory mapping of prompt_id -> current status buffer
         self._active_jobs = {} 
+        self._delivery_tasks = {} # prompt_id -> asyncio.Task 
 
     async def start(self):
         """Start listening to WebSocket events."""
@@ -107,6 +108,36 @@ class JobManager:
         await self.repo.update_job_status(job.prompt_id, JobStatus.CANCELLED.value)
         return True
 
+    async def _schedule_delivery(self, job: Job):
+        """Schedule a debounced delivery for a job."""
+        prompt_id = job.prompt_id
+        
+        # Cancel existing timer if any
+        if prompt_id in self._delivery_tasks:
+            self._delivery_tasks[prompt_id].cancel()
+            
+        # Create new timer
+        task = asyncio.create_task(self._deliver_delayed(job))
+        self._delivery_tasks[prompt_id] = task
+        
+        # Cleanup callback
+        def cleanup(t):
+            if prompt_id in self._delivery_tasks and self._delivery_tasks[prompt_id] == t:
+                self._delivery_tasks.pop(prompt_id, None)
+                
+        task.add_done_callback(cleanup)
+
+    async def _deliver_delayed(self, job: Job):
+        """Wait briefly then deliver the job."""
+        try:
+            await asyncio.sleep(1.0) # Debounce window
+            logger.info(f"Job {job.id} delivery timer expired. Delivering results...")
+            await self.delivery.deliver_job(job)
+        except asyncio.CancelledError:
+            logger.debug(f"Job {job.id} delivery debounced/cancelled.")
+        except Exception as e:
+            logger.error(f"Error in delayed delivery for job {job.id}: {e}")
+
     # -- WebSocket Event Handlers --
 
     async def _on_status(self, data: Dict[str, Any]):
@@ -156,8 +187,8 @@ class JobManager:
             )
             
             if job:
-                logger.info(f"Job {job.id} completed. Delivering results...")
-                await self.delivery.deliver_job(job)
+                logger.info(f"Job {job.id} update received. Scheduling delivery...")
+                await self._schedule_delivery(job)
 
     async def _on_execution_error(self, data: Dict[str, Any]):
         msg = data.get("data", {})
