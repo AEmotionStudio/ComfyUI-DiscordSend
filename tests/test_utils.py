@@ -13,7 +13,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from discordsend_utils.sanitizer import sanitize_json_for_export
-from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging
+from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry
+from unittest.mock import patch, MagicMock
 
 
 class TestSanitizer(unittest.TestCase):
@@ -117,6 +118,45 @@ class TestWebhookValidation(unittest.TestCase):
         """Should reject non-webhook URLs."""
         is_valid, message = validate_webhook_url("https://example.com")
         self.assertFalse(is_valid)
+
+    def test_bypass_attempt_url(self):
+        """Should reject URLs that attempt to bypass validation."""
+        # This URL contains 'discord' and 'webhook' but is not hosted on discord.com
+        bypass_url = "http://evil-site.com/discord/webhook"
+        is_valid, message = validate_webhook_url(bypass_url)
+        self.assertFalse(is_valid)
+
+    def test_localhost_url(self):
+        """Should reject localhost URLs (SSRF protection)."""
+        is_valid, message = validate_webhook_url("http://localhost:8080/admin")
+        self.assertFalse(is_valid)
+
+
+class TestSSRFPrevention(unittest.TestCase):
+    """Tests for SSRF prevention mechanisms."""
+
+    def test_send_to_discord_validates_url(self):
+        """Should raise ValueError for invalid URLs before sending request."""
+        malicious_url = "http://localhost:8080/admin/delete"
+
+        # We don't need to mock requests.post because it should fail before calling it
+        with self.assertRaises(ValueError) as cm:
+            send_to_discord_with_retry(malicious_url, data={"content": "test"})
+
+        self.assertIn("Invalid webhook URL", str(cm.exception))
+
+    @patch('discordsend_utils.discord_api.requests.post')
+    def test_send_to_discord_allows_valid_url(self, mock_post):
+        """Should allow valid Discord URLs."""
+        valid_url = "https://discord.com/api/webhooks/123/abc"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        send_to_discord_with_retry(valid_url, data={"content": "test"})
+
+        mock_post.assert_called_once()
 
 
 class TestWebhookSanitization(unittest.TestCase):
