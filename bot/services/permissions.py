@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 import discord
 from enum import Enum
 
@@ -26,8 +26,7 @@ class PermissionService:
             Permissions.ADMIN.value: 3
         }
 
-    import discord
-from typing import Union
+
 
     async def get_user_permission_level(self, member: Union[discord.Member, discord.User]) -> str:
         """

@@ -50,7 +50,7 @@ class EmbedBuilder:
             timestamp=datetime.utcnow()
         )
         embed.add_field(name="Images", value=f"{image_count} generated", inline=True)
-        embed.add_field(name="Duration", value=f"{job.execution_time:.1f}s" if hasattr(job, 'execution_time') and job.execution_time else "Done", inline=True)
+        embed.add_field(name="Duration", value=f"{job.duration:.1f}s" if hasattr(job, 'duration') and job.duration else "Done", inline=True)
         
         if job.negative_prompt:
              embed.add_field(name="Negative Prompt", value=job.negative_prompt, inline=False)

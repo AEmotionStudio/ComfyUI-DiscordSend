@@ -70,7 +70,7 @@ class Repository:
                 session.add(user)
                 await session.commit()
                 await session.refresh(user)
-            elif user.username != username:
+            elif user.username != username and username != "Unknown":
                 user.username = username
                 await session.commit()
 
