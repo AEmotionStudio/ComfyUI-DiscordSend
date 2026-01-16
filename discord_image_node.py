@@ -21,16 +21,9 @@ from discordsend_utils import (
     sanitize_json_for_export, 
     update_github_cdn_urls, 
     extract_prompts_from_workflow,
-    send_to_discord_with_retry
+    send_to_discord_with_retry,
+    tensor_to_numpy_uint8
 )
-
-
-# Helper function to convert tensor to OpenCV format
-def tensor_to_cv(tensor: torch.Tensor) -> np.ndarray:
-    """Convert a PyTorch tensor to an OpenCV-compatible numpy array."""
-    # Optimization: Use torch operations for scaling/clipping/casting to avoid large float64 intermediate arrays on CPU
-    return (tensor.squeeze() * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()
-
 
 
 class DiscordSendSaveImage:
@@ -434,9 +427,9 @@ class DiscordSendSaveImage:
         
         for batch_number, image in enumerate(images):
             # Convert the tensor to a PIL image
-            # Optimization: Use torch operations for scaling/clipping/casting to avoid large float64 intermediate arrays on CPU
-            # This is significantly faster (~70%) and uses less memory
-            i = (image * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()
+            # Optimization: Use torch operations for scaling/clipping/casting via tensor_to_numpy_uint8
+            # This is significantly faster (~70%) and uses less memory than naive numpy conversion
+            i = tensor_to_numpy_uint8(image)
             img = Image.fromarray(i)
             
             # Get original dimensions before any resizing
