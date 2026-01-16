@@ -8,6 +8,7 @@ from .sanitizer import sanitize_json_for_export
 from .github_integration import update_github_cdn_urls
 from .prompt_extractor import extract_prompts_from_workflow
 from .discord_api import DiscordWebhookClient, validate_webhook_url, send_to_discord_with_retry
+from .image_processing import tensor_to_numpy_uint8
 
 __all__ = [
     'sanitize_json_for_export',
@@ -16,4 +17,5 @@ __all__ = [
     'DiscordWebhookClient',
     'validate_webhook_url',
     'send_to_discord_with_retry',
+    'tensor_to_numpy_uint8',
 ]

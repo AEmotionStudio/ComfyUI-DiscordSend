@@ -8,3 +8,9 @@
 - **Pillow** is **~30% faster** than OpenCV for **JPEG** encoding and avoids extra numpy conversion overhead.
 - **PyTorch tensor operations** (`(tensor * 255).to(uint8).numpy()`) are **~70% faster** than naive `numpy` conversion (`tensor.numpy() * 255`) by avoiding large float64 intermediate arrays.
 **Action:** Use PyTorch for tensor preprocessing. Use OpenCV for PNG, Pillow for JPEG/WebP.
+
+## 2026-01-14 - Tensor to Numpy Conversion Optimization
+**Learning:**
+- Naive conversion `np.clip(255. * tensor.cpu().numpy(), 0, 255).astype(np.uint8)` creates large intermediate float arrays on CPU.
+- Performing scaling, clamping, and casting on the tensor *before* moving to CPU (`(tensor * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()`) is significantly faster and more memory efficient.
+**Action:** Always process tensors (scale/clamp/cast) before converting to numpy/CPU when preparing images for PIL/OpenCV.

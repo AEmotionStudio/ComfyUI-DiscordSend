@@ -24,7 +24,7 @@ import functools
 import server
 
 # Import shared utilities
-from discordsend_utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry
+from discordsend_utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry, tensor_to_numpy_uint8
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -438,7 +438,7 @@ class DiscordSendSaveVideo:
         # Save first frame as PNG to keep metadata
         first_image_file = f"{filename}_{counter:05}.png"
         first_image_path = os.path.join(full_output_folder, first_image_file)
-        Image.fromarray(np.clip(255. * first_image.cpu().numpy(), 0, 255).astype(np.uint8)).save(
+        Image.fromarray(tensor_to_numpy_uint8(first_image)).save(
             first_image_path,
             pnginfo=metadata,
             compress_level=4,
@@ -483,7 +483,7 @@ class DiscordSendSaveVideo:
                 # Convert tensor images to PIL images
                 pil_images = []
                 for img in image_sequence:
-                    img_np = np.clip(255. * img.cpu().numpy(), 0, 255).astype(np.uint8)
+                    img_np = tensor_to_numpy_uint8(img)
                     pil_images.append(Image.fromarray(img_np))
                 
                 if len(pil_images) > 0:
@@ -635,7 +635,8 @@ class DiscordSendSaveVideo:
                         env.update(video_format["environment"])
                     
                     # Convert tensor images to bytes
-                    images_bytes = map(lambda x: (np.clip(255. * x.cpu().numpy(), 0, 255).astype(np.uint8)).tobytes(), image_sequence)
+                    # Optimization: Use tensor_to_numpy_uint8 for faster conversion
+                    images_bytes = map(lambda x: tensor_to_numpy_uint8(x).tobytes(), image_sequence)
                     
                     # Base ffmpeg arguments
                     args = [
@@ -690,8 +691,9 @@ class DiscordSendSaveVideo:
                     i_pix_fmt = 'rgba'
                 else:
                     i_pix_fmt = 'rgb24'
-                    
-                images_bytes = map(lambda x: (np.clip(255. * x.cpu().numpy(), 0, 255).astype(np.uint8)).tobytes(), image_sequence)
+
+                # Optimization: Use tensor_to_numpy_uint8 for faster conversion
+                images_bytes = map(lambda x: tensor_to_numpy_uint8(x).tobytes(), image_sequence)
                 
                 # Set up ffmpeg arguments based on format
                 loop_args = []
