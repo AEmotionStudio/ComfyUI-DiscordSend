@@ -438,7 +438,8 @@ class DiscordSendSaveVideo:
         # Save first frame as PNG to keep metadata
         first_image_file = f"{filename}_{counter:05}.png"
         first_image_path = os.path.join(full_output_folder, first_image_file)
-        Image.fromarray(np.clip(255. * first_image.cpu().numpy(), 0, 255).astype(np.uint8)).save(
+        # Optimization: Use torch operations for scaling/clipping/casting to avoid large float64 intermediate arrays on CPU
+        Image.fromarray((first_image * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()).save(
             first_image_path,
             pnginfo=metadata,
             compress_level=4,
@@ -483,7 +484,8 @@ class DiscordSendSaveVideo:
                 # Convert tensor images to PIL images
                 pil_images = []
                 for img in image_sequence:
-                    img_np = np.clip(255. * img.cpu().numpy(), 0, 255).astype(np.uint8)
+                    # Optimization: Use torch operations for scaling/clipping/casting
+                    img_np = (img * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()
                     pil_images.append(Image.fromarray(img_np))
                 
                 if len(pil_images) > 0:
@@ -634,7 +636,8 @@ class DiscordSendSaveVideo:
                         env.update(video_format["environment"])
                     
                     # Convert tensor images to bytes
-                    images_bytes = map(lambda x: (np.clip(255. * x.cpu().numpy(), 0, 255).astype(np.uint8)).tobytes(), image_sequence)
+                    # Optimization: Use torch operations for scaling/clipping/casting
+                    images_bytes = map(lambda x: ((x * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()).tobytes(), image_sequence)
                     
                     # Base ffmpeg arguments
                     args = [
@@ -690,7 +693,8 @@ class DiscordSendSaveVideo:
                 else:
                     i_pix_fmt = 'rgb24'
                     
-                images_bytes = map(lambda x: (np.clip(255. * x.cpu().numpy(), 0, 255).astype(np.uint8)).tobytes(), image_sequence)
+                # Optimization: Use torch operations for scaling/clipping/casting
+                images_bytes = map(lambda x: ((x * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()).tobytes(), image_sequence)
                 
                 # Set up ffmpeg arguments based on format
                 loop_args = []
