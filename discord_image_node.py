@@ -295,7 +295,7 @@ class DiscordSendSaveImage:
             filename_prefix, dest_folder, images[0].shape[1], images[0].shape[0])
         
         # For overwrite functionality, we'll just always use the same counter instead of bypassing validation
-        if overwrite_last == "enable":
+        if overwrite_last:
             counter = 1  # Always use the same counter value for overwriting
         else:
             # When not overwriting, we need to find the highest existing counter and start from there
@@ -327,7 +327,7 @@ class DiscordSendSaveImage:
                 print(f"Error determining next file counter: {e}")
                 # Default to ComfyUI's counter if we can't determine the next one
         
-        print(f"Using counter: {counter} for {'overwriting' if overwrite_last == 'enable' else 'new files'}")
+        print(f"Using counter: {counter} for {'overwriting' if overwrite_last else 'new files'}")
         print(f"Output prefix: {filename_prefix}")
         
         # Map resize method strings to PIL resize methods
@@ -443,7 +443,7 @@ class DiscordSendSaveImage:
             orig_width, orig_height = img.size
             
             # Resize to power of 2 if enabled
-            if resize_to_power_of_2 == "enable":
+            if resize_to_power_of_2:
                 # Calculate nearest power of 2 dimensions
                 new_width = 2 ** int(np.log2(orig_width) + 0.5)  # Round to nearest power of 2
                 new_height = 2 ** int(np.log2(orig_height) + 0.5)  # Round to nearest power of 2
@@ -471,7 +471,7 @@ class DiscordSendSaveImage:
             
             # Add dimensions to filename if enabled
             dimensions_suffix = ""
-            if add_dimensions == "enable":
+            if add_dimensions:
                 dimensions_suffix = f"_{width}x{height}"
                 filename_prefix += dimensions_suffix
                 
@@ -524,7 +524,7 @@ class DiscordSendSaveImage:
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
             
             # Add dimensions tag before the counter if enabled
-            if add_dimensions == "enable" and dimensions_suffix not in filename_with_batch_num:
+            if add_dimensions and dimensions_suffix not in filename_with_batch_num:
                 # Insert dimensions before counter
                 base_name = os.path.splitext(filename_with_batch_num)[0]
                 filename_with_batch_num = f"{base_name}{dimensions_suffix}"
@@ -790,7 +790,7 @@ class DiscordSendSaveImage:
                         discord_send_success = False
                 
                 # Increment counter if not overwriting
-                if overwrite_last != "enable":
+                if not overwrite_last:
                     counter += 1
             except Exception as e:
                 print(f"Error saving image: {e}")
