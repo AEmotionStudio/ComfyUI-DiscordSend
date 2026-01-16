@@ -395,8 +395,31 @@ def send_to_discord_with_retry(
             logger.warning(f"Request timeout, attempt {attempt + 1}/{max_retries}")
             last_exception = requests.exceptions.Timeout("Discord request timed out")
         except requests.exceptions.RequestException as e:
-            logger.warning(f"Request error: {e}, attempt {attempt + 1}/{max_retries}")
-            last_exception = e
+            # Sanitize error message to prevent token leakage
+            error_msg = str(e)
+            match = re.search(r"/api/webhooks/\d+/([\w-]+)", webhook_url)
+            if match:
+                token = match.group(1)
+                if token in error_msg:
+                    error_msg = error_msg.replace(token, "[REDACTED]")
+
+            logger.warning(f"Request error: {error_msg}, attempt {attempt + 1}/{max_retries}")
+
+            # Store sanitized exception to avoid leaking token if raised later
+            if match and match.group(1) in str(e):
+                # Create a new exception of the same type with sanitized message
+                # We try to preserve the exception type, but fallback to RequestException if init fails
+                try:
+                    last_exception = type(e)(error_msg)
+                    # Preserve context attributes if possible
+                    last_exception.request = getattr(e, "request", None)
+                    last_exception.response = getattr(e, "response", None)
+                except:
+                    last_exception = requests.exceptions.RequestException(error_msg)
+                    last_exception.request = getattr(e, "request", None)
+                    last_exception.response = getattr(e, "response", None)
+            else:
+                last_exception = e
         
         # Exponential backoff before retry
         if attempt < max_retries - 1:
