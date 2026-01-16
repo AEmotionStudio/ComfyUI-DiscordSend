@@ -355,7 +355,7 @@ class DiscordSendSaveVideo:
         num_frames = len(images)
         if num_frames == 0:
             print("DiscordSendSaveVideo: No frames to process")
-            return {"ui": {}, "result": (None,)}
+            raise ValueError("DiscordSendSaveVideo: No frames to process. Please check your input images.")
         
         pbar = ProgressBar(num_frames)
         
@@ -537,8 +537,9 @@ class DiscordSendSaveVideo:
                 else:
                     print("No images to save")
             except Exception as e:
-                print(f"Error creating {format} with PIL: {str(e)}")
-                return {"ui": {}, "result": (None,)}
+                error_msg = f"Error creating {format} with PIL: {str(e)}"
+                print(error_msg)
+                raise RuntimeError(error_msg)
             
             if ffmpeg_path is None and format_type == "video" and format_ext not in ["gif", "webp"]:
                 print(f"Warning: ffmpeg is required for video format {format} and could not be found.")
@@ -1509,7 +1510,7 @@ class DiscordSendSaveVideo:
         # Check if any output files were created
         if len(output_files) == 0:
             print("DiscordSendSaveVideo: No output files were created")
-            return {"ui": {}, "result": (None,)}
+            raise RuntimeError("DiscordSendSaveVideo: No output files were created. Check console for details.")
         
         # Status messages
         if save_output:
