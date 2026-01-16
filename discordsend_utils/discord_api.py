@@ -397,7 +397,8 @@ def send_to_discord_with_retry(
         except requests.exceptions.RequestException as e:
             # Sanitize error message to prevent token leakage
             error_msg = str(e)
-            match = re.search(r"/api/webhooks/\d+/([\w-]+)", webhook_url)
+            # Use case-insensitive matching to handle uppercase URLs
+            match = re.search(r"/api/webhooks/\d+/([\w-]+)", webhook_url, re.IGNORECASE)
             if match:
                 token = match.group(1)
                 if token in error_msg:
