@@ -432,6 +432,9 @@ class DiscordSendSaveImage:
             i = tensor_to_numpy_uint8(image)
             img = Image.fromarray(i)
             
+            # Track if resizing happened to optimize Discord encoding later
+            was_resized = False
+
             # Get original dimensions before any resizing
             orig_width, orig_height = img.size
             
@@ -452,11 +455,13 @@ class DiscordSendSaveImage:
                 if (new_width != orig_width or new_height != orig_height):
                     try:
                         img = img.resize((new_width, new_height), selected_resize_method)
+                        was_resized = True
                         print(f"Successfully resized using {resize_method} method")
                     except Exception as e:
                         print(f"Error during power of 2 resize: {e}")
                         # Fallback to BICUBIC if selected method fails
                         img = img.resize((new_width, new_height), Image.BICUBIC)
+                        was_resized = True
                         print("Fallback to BICUBIC resize method due to error")
             
             # Get dimensions - either original or resized
@@ -598,7 +603,12 @@ class DiscordSendSaveImage:
 
                         elif file_format == "png":
                             # Use CV2 for PNG (significantly faster)
-                            img_cv = np.array(img)
+                            # Optimization: If image wasn't resized, use the original numpy array 'i'
+                            # This avoids an expensive PIL->Numpy conversion/copy (~500ms for 4K images)
+                            if not was_resized:
+                                img_cv = i
+                            else:
+                                img_cv = np.array(img)
 
                             # Convert RGB (PIL) to BGR (OpenCV)
                             if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:

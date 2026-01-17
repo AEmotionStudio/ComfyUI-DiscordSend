@@ -14,3 +14,9 @@
 - Naive conversion `np.clip(255. * tensor.cpu().numpy(), 0, 255).astype(np.uint8)` creates large intermediate float arrays on CPU.
 - Performing scaling, clamping, and casting on the tensor *before* moving to CPU (`(tensor * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()`) is significantly faster and more memory efficient.
 **Action:** Always process tensors (scale/clamp/cast) before converting to numpy/CPU when preparing images for PIL/OpenCV.
+
+## 2026-01-14 - Avoid Redundant PIL to Numpy Conversion
+**Learning:**
+- Converting a large PIL Image back to a Numpy array (`np.array(img)`) is surprisingly slow (measured ~500ms for 4K image).
+- When the PIL Image wraps an existing Numpy array and hasn't been modified (e.g. resized), reusing the original Numpy array avoids this overhead completely.
+**Action:** Track modifications to PIL images (like resizing) and reuse the source Numpy array for OpenCV operations if no modifications occurred.
