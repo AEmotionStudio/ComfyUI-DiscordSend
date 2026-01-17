@@ -131,6 +131,12 @@ class TestWebhookValidation(unittest.TestCase):
         is_valid, message = validate_webhook_url("http://localhost:8080/admin")
         self.assertFalse(is_valid)
 
+    def test_http_url_rejected(self):
+        """Should reject HTTP URLs (must be HTTPS)."""
+        is_valid, message = validate_webhook_url("http://discord.com/api/webhooks/123/abc")
+        self.assertFalse(is_valid)
+        self.assertIn("must start with https://", message)
+
     def test_ip_encoding_urls(self):
         """Should reject alternate IP encodings."""
         self.assertFalse(validate_webhook_url("http://127.0.0.1")[0])

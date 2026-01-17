@@ -20,8 +20,8 @@ logger = logging.getLogger("comfyui_discordsend")
 
 # Discord webhook URL patterns
 WEBHOOK_URL_PATTERNS = [
-    r"https?://(?:www\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$",
-    r"https?://(?:www\.)?discordapp\.com/api/webhooks/\d+/[\w-]+$",
+    r"https://(?:www\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$",
+    r"https://(?:www\.)?discordapp\.com/api/webhooks/\d+/[\w-]+$",
 ]
 
 
@@ -38,8 +38,8 @@ def validate_webhook_url(url: str) -> Tuple[bool, str]:
     if not url:
         return False, "Webhook URL is empty"
     
-    if not url.startswith("http"):
-        return False, "Webhook URL must start with http:// or https://"
+    if not url.startswith("https://"):
+        return False, "Webhook URL must start with https://"
     
     # Check against known patterns
     for pattern in WEBHOOK_URL_PATTERNS:
