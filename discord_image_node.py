@@ -61,7 +61,7 @@ class DiscordSendSaveImage:
                 }),
                 "lossless": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "If enabled, will use lossless compression for supported formats (PNG and WebP). JPEG will use maximum quality."
+                    "tooltip": "Use lossless compression for WebP (PNG is always lossless). For JPEG, forces maximum quality (100)."
                 }),
                 "save_output": ("BOOLEAN", {
                     "default": True,
@@ -76,8 +76,8 @@ class DiscordSendSaveImage:
                     "tooltip": "Add the current date (YYYY-MM-DD) to filenames."
                 }),
                 "add_time": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Add the current time (HH-MM-SS) to filenames."
+                    "default": True,
+                    "tooltip": "Add the current time (HH-MM-SS) to filenames. ⚠️ Recommended for Discord to avoid caching issues."
                 }),
                 "add_dimensions": ("BOOLEAN", {
                     "default": False,
@@ -98,12 +98,12 @@ class DiscordSendSaveImage:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Secure Discord webhook URL (found in Server Settings > Integrations > Webhooks). Treated as sensitive data."
+                    "tooltip": "Secure Discord webhook URL (found in Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
                     "multiline": True,
-                    "tooltip": "Optional text to display with the image. Supports Discord Markdown (bold, italic, etc.)."
+                    "tooltip": "Optional text to display with the image. Supports Discord Markdown (e.g. **bold**, *italic*, > quote)."
                 }),
                 "include_prompts_in_message": ("BOOLEAN", {
                     "default": False,
@@ -137,7 +137,7 @@ class DiscordSendSaveImage:
                 "github_token": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub personal access token with repo permissions."
+                    "tooltip": "GitHub personal access token (PAT) with 'repo' scope. Keep this private!"
                 }),
                 "github_file_path": ("STRING", {
                     "default": "cdn_urls.md",

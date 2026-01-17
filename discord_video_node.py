@@ -251,12 +251,12 @@ class DiscordSendSaveVideo:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Discord webhook URL (from Server Settings > Integrations > Webhooks). Leave empty to disable Discord integration."
+                    "tooltip": "Secure Discord webhook URL (from Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
                     "multiline": True,
-                    "tooltip": "Optional text to display with the video. Supports Discord Markdown (bold, italic, etc.)."
+                    "tooltip": "Optional text to display with the video. Supports Discord Markdown (e.g. **bold**, *italic*, > quote)."
                 }),
                 "include_prompts_in_message": ("BOOLEAN", {
                     "default": False,
@@ -286,7 +286,7 @@ class DiscordSendSaveVideo:
                 "github_token": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub personal access token with repo permissions."
+                    "tooltip": "GitHub personal access token (PAT) with 'repo' scope. Keep this private!"
                 }),
                 "github_file_path": ("STRING", {
                     "default": "cdn_urls.md", 
