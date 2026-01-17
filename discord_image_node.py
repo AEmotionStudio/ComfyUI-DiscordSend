@@ -89,7 +89,7 @@ class DiscordSendSaveImage:
                 }),
                 "resize_method": (["nearest-exact", "bilinear", "bicubic", "lanczos", "box"], {
                     "default": "lanczos", 
-                    "tooltip": "The method to use when resizing images. Lanczos generally provides the best quality but may be slower."
+                    "tooltip": "Resampling algorithm: 'lanczos' (best for photos), 'nearest-exact' (best for pixel art), 'bilinear'/'bicubic' (faster)."
                 }),
                 "send_to_discord": ("BOOLEAN", {
                     "default": False,
@@ -98,7 +98,7 @@ class DiscordSendSaveImage:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Discord webhook URL (from Server Settings > Integrations > Webhooks). Leave empty to disable Discord integration."
+                    "tooltip": "Secure Discord webhook URL (found in Server Settings > Integrations > Webhooks). Treated as sensitive data."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
