@@ -254,7 +254,16 @@ class DiscordWebhookClient:
             except requests.exceptions.Timeout:
                 last_error = "Request timed out"
             except requests.exceptions.RequestException as e:
-                last_error = str(e)
+                # Sanitize error message to prevent token leakage
+                error_msg = str(e)
+                # Use case-insensitive matching to handle uppercase URLs
+                match = re.search(r"/api/webhooks/\d+/([\w-]+)", self.webhook_url, re.IGNORECASE)
+                if match:
+                    token = match.group(1)
+                    if token in error_msg:
+                        error_msg = error_msg.replace(token, "[REDACTED]")
+
+                last_error = error_msg
             
             # Exponential backoff
             if attempt < self.max_retries - 1:

@@ -74,7 +74,11 @@ def update_github_cdn_urls(
         elif response.status_code == 404:
             pass  # File doesn't exist, will create new
         else:
-            return False, f"Error checking GitHub file: {response.status_code} - {response.text}"
+            # Sanitize response text
+            error_details = response.text
+            if github_token and github_token in error_details:
+                error_details = error_details.replace(github_token, "[REDACTED_TOKEN]")
+            return False, f"Error checking GitHub file: {response.status_code} - {error_details}"
         
         # Prepare file content
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -120,7 +124,11 @@ def update_github_cdn_urls(
         if response.status_code in [200, 201]:
             return True, f"Successfully updated GitHub file with {len(cdn_urls)} Discord CDN URLs"
         else:
-            return False, f"Error updating GitHub file: {response.status_code} - {response.text}"
+            # Sanitize response text to ensure no token leakage
+            error_details = response.text
+            if github_token and github_token in error_details:
+                error_details = error_details.replace(github_token, "[REDACTED_TOKEN]")
+            return False, f"Error updating GitHub file: {response.status_code} - {error_details}"
     
     except requests.exceptions.Timeout:
         return False, "GitHub API request timed out"
