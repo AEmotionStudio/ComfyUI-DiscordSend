@@ -8,13 +8,21 @@ Or without pytest: python tests/test_utils.py
 import sys
 import os
 import unittest
+from unittest.mock import patch, MagicMock
+import requests
+
+# Mock dependencies before importing project modules
+sys.modules["torch"] = MagicMock()
+sys.modules["numpy"] = MagicMock()
+sys.modules["cv2"] = MagicMock()
+# sys.modules["PIL"] = MagicMock() # PIL might be installed, so maybe not mock it if not needed, but safer to mock if we don't rely on it for these tests
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from discordsend_utils.sanitizer import sanitize_json_for_export
-from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry
-from unittest.mock import patch, MagicMock
+from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry, DiscordWebhookClient
+from discordsend_utils.github_integration import update_github_cdn_urls
 
 
 class TestSanitizer(unittest.TestCase):
@@ -197,6 +205,57 @@ class TestWebhookSanitization(unittest.TestCase):
         """Should handle empty URLs."""
         result = sanitize_webhook_for_logging("")
         self.assertEqual(result, "")
+
+
+class TestDiscordWebhookClient(unittest.TestCase):
+    """Tests for DiscordWebhookClient security features."""
+
+    @patch('discordsend_utils.discord_api.requests.post')
+    def test_exception_token_leakage(self, mock_post):
+        """Should redact tokens from exception messages in last_error."""
+        token = "SUPER_SECRET_TOKEN"
+        url = f"https://discord.com/api/webhooks/123456/{token}"
+        client = DiscordWebhookClient(url)
+
+        # Configure mock to raise an exception containing the token
+        error_message = f"Max retries exceeded with url: /api/webhooks/123456/{token}"
+        mock_post.side_effect = requests.exceptions.ConnectionError(error_message)
+
+        success, result = client.send_message("Test message")
+
+        self.assertFalse(success)
+        self.assertIn("error", result)
+        self.assertNotIn(token, result["error"])
+        self.assertIn("[REDACTED]", result["error"])
+
+
+class TestGitHubIntegration(unittest.TestCase):
+    """Tests for GitHub integration security features."""
+
+    @patch('discordsend_utils.github_integration.requests.put')
+    @patch('discordsend_utils.github_integration.requests.get')
+    def test_github_token_redaction_in_response(self, mock_get, mock_put):
+        """Should redact GitHub token from error messages including response text."""
+        token = "ghp_SECRET_TOKEN"
+        repo = "user/repo"
+        file_path = "cdn_urls.md"
+
+        # Mock GET to return 404 (file doesn't exist)
+        mock_get_response = MagicMock()
+        mock_get_response.status_code = 404
+        mock_get.return_value = mock_get_response
+
+        # Mock PUT to fail and return the token in the response text (simulating leak)
+        mock_put_response = MagicMock()
+        mock_put_response.status_code = 401
+        mock_put_response.text = f"Bad credentials: {token} is invalid"
+        mock_put.return_value = mock_put_response
+
+        success, message = update_github_cdn_urls(repo, token, file_path, [("test.png", "http://url")])
+
+        self.assertFalse(success)
+        self.assertNotIn(token, message)
+        self.assertIn("[REDACTED_TOKEN]", message)
 
 
 if __name__ == "__main__":
