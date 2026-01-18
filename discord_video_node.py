@@ -147,11 +147,13 @@ class DiscordSendSaveVideo:
         """
         Define the input types for the DiscordSendSaveVideo node.
         """
-        # Check if ffmpeg is available
+        # Determine format options and defaults based on ffmpeg availability
         if ffmpeg_path is None:
             print("ffmpeg not found. Video output will be limited or unavailable.")
             # Always make GIF available even without ffmpeg (we'll use PIL as fallback)
             video_formats = ["video/gif"]
+            format_default = "video/gif"
+            format_tooltip = "⚠️ FFmpeg not found! Only GIF format is available (using PIL fallback).\n\nPlease install FFmpeg to unlock MP4, WebM, and other video formats."
         else:
             # Enhanced video formats for high-quality output
             video_formats = [
@@ -170,6 +172,20 @@ class DiscordSendSaveVideo:
                 # Professional formats
                 "video/prores",    # Apple ProRes (high quality, low compression)
             ]
+            format_default = "video/h264-mp4"
+            format_tooltip = ("The video format to save in. Options include:\n"
+                              "# Image formats:\n"
+                              "- image/gif: Standard GIF format (NO AUDIO support)\n"
+                              "- image/webp: WebP format (better quality than GIF, NO AUDIO support)\n"
+                              "- video/gif: Video format GIF (higher frame rate support, NO AUDIO support)\n\n"
+                              "# Standard video formats:\n"
+                              "- video/mp4: Standard MP4 format with good compatibility (supports audio)\n"
+                              "- video/h264-mp4: High-quality MP4 with H264 codec (supports audio)\n"
+                              "- video/h265-mp4: MP4 with H265/HEVC codec (better compression, supports audio)\n"
+                              "- video/webm: Standard WebM format (supports audio)\n"
+                              "- video/vp9-webm: WebM with VP9 codec (higher quality, supports audio)\n\n"
+                              "# Professional formats:\n"
+                              "- video/prores: Apple ProRes (professional quality, supports audio when saving locally but NO AUDIO when sending to Discord, requires QuickTime or specialized player to view on Windows)")
         
         return {
             "required": {
@@ -180,20 +196,8 @@ class DiscordSendSaveVideo:
             "optional": {
                 # Video format settings
                 "format": (video_formats, {
-                    'default': "video/h264-mp4", 
-                    "tooltip": "The video format to save in. Options include:\n" +
-                               "# Image formats:\n" +
-                               "- image/gif: Standard GIF format (NO AUDIO support)\n" +
-                               "- image/webp: WebP format (better quality than GIF, NO AUDIO support)\n" +
-                               "- video/gif: Video format GIF (higher frame rate support, NO AUDIO support)\n\n" +
-                               "# Standard video formats:\n" +
-                               "- video/mp4: Standard MP4 format with good compatibility (supports audio)\n" +
-                               "- video/h264-mp4: High-quality MP4 with H264 codec (supports audio)\n" +
-                               "- video/h265-mp4: MP4 with H265/HEVC codec (better compression, supports audio)\n" +
-                               "- video/webm: Standard WebM format (supports audio)\n" +
-                               "- video/vp9-webm: WebM with VP9 codec (higher quality, supports audio)\n\n" +
-                               "# Professional formats:\n" +
-                               "- video/prores: Apple ProRes (professional quality, supports audio when saving locally but NO AUDIO when sending to Discord, requires QuickTime or specialized player to view on Windows)"
+                    'default': format_default,
+                    "tooltip": format_tooltip
                 }),
                 "frame_rate": (
                     "FLOAT", 
