@@ -425,6 +425,28 @@ class DiscordSendSaveImage:
                     image_info["prompt_message"] = prompt_message
                     print("Prepared prompts for Discord message")
         
+        # Optimization: Create metadata once for the entire batch
+        # This prevents redundant sanitization and JSON serialization for every image
+        metadata = None
+        if not args.disable_metadata:
+            metadata = PngInfo()
+            if prompt is not None:
+                # Prompt is already sanitized at start of function, but we double-check
+                # Note: sanitize_json_for_export is relatively expensive (recursion + regex)
+                # so doing this once per batch instead of per image is a big win
+                sanitized_prompt = sanitize_json_for_export(prompt)
+                metadata.add_text("prompt", json.dumps(sanitized_prompt))
+            if extra_pnginfo is not None:
+                # extra_pnginfo is already sanitized at start of function
+                sanitized_extra_pnginfo = sanitize_json_for_export(extra_pnginfo)
+                for x in sanitized_extra_pnginfo:
+                    if x == "workflow":
+                        # Extra sanitization for workflow data
+                        workflow_data = sanitize_json_for_export(sanitized_extra_pnginfo[x])
+                        metadata.add_text(x, json.dumps(workflow_data))
+                    else:
+                        metadata.add_text(x, json.dumps(sanitized_extra_pnginfo[x]))
+
         for batch_number, image in enumerate(images):
             # Convert the tensor to a PIL image
             # Optimization: Use torch operations for scaling/clipping/casting via tensor_to_numpy_uint8
@@ -499,25 +521,6 @@ class DiscordSendSaveImage:
                     discord_message += image_info["prompt_message"]
                     print("Added prompts to Discord message after image information")
             
-            # Create metadata for the image
-            metadata = None
-            if not args.disable_metadata:
-                metadata = PngInfo()
-                if prompt is not None:
-                    # Final sanitization check before embedding
-                    sanitized_prompt = sanitize_json_for_export(prompt)
-                    metadata.add_text("prompt", json.dumps(sanitized_prompt))
-                if extra_pnginfo is not None:
-                    # Final sanitization check before embedding
-                    sanitized_extra_pnginfo = sanitize_json_for_export(extra_pnginfo)
-                    for x in sanitized_extra_pnginfo:
-                        if x == "workflow":
-                            # Extra sanitization for workflow data
-                            workflow_data = sanitize_json_for_export(sanitized_extra_pnginfo[x])
-                            metadata.add_text(x, json.dumps(workflow_data))
-                        else:
-                            metadata.add_text(x, json.dumps(sanitized_extra_pnginfo[x]))
-            
             # For Discord output
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
             
@@ -540,20 +543,8 @@ class DiscordSendSaveImage:
             try:
                 # Save the image based on format
                 if file_format == "png":
-                    # For PNG, make sure we have sanitized metadata
-                    if metadata is not None and hasattr(metadata, "text"):
-                        # Double check any JSON in the metadata
-                        for key in list(metadata.text.keys()):
-                            try:
-                                value = metadata.text[key]
-                                # Try to parse and sanitize any JSON values
-                                json_value = json.loads(value)
-                                sanitized_json = sanitize_json_for_export(json_value)
-                                metadata.text[key] = json.dumps(sanitized_json)
-                            except:
-                                # Not JSON or error, leave as is
-                                pass
-                                
+                    # For PNG, we already have sanitized metadata created before the loop
+                    # No need to check it again for every image
                     img.save(filepath, pnginfo=metadata, compress_level=self.compress_level)
                 elif file_format == "jpeg":
                     # JPEG is always lossy, but we can set quality to maximum if lossless is requested
