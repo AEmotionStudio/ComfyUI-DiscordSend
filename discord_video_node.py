@@ -240,7 +240,7 @@ class DiscordSendSaveVideo:
                 }),
                 "add_time": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Add the current time (HH-MM-SS) to filenames. ⚠️ Recommended for Discord to avoid caching issues."
+                    "tooltip": "Add time to filenames. ⚠️ KEEP ENABLED for Discord videos! Disabling causes playback failure (single frame bug). To hide info in chat, disable 'include_video_info' instead."
                 }),
                 "add_dimensions": ("BOOLEAN", {
                     "default": True,
