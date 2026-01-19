@@ -66,5 +66,36 @@ class TestNumpyToSubprocess(unittest.TestCase):
         res = subprocess.run(cmd, input=mv, capture_output=True)
         self.assertEqual(res.stdout, contiguous_data.tobytes())
 
+    def test_popen_stdin_write_fixed_non_contiguous(self):
+        """
+        Test writing fixed (made contiguous) numpy array to Popen.stdin.
+        """
+        # Create a 2D array and transpose it to make it non-contiguous
+        data = np.zeros((10, 10), dtype=np.uint8)
+        # Fill with some data
+        for i in range(10):
+            for j in range(10):
+                data[i, j] = i + j
+
+        transposed_data = data.T
+        self.assertFalse(transposed_data.flags['C_CONTIGUOUS'])
+
+        # Fix it
+        contiguous_data = np.ascontiguousarray(transposed_data)
+        self.assertTrue(contiguous_data.flags['C_CONTIGUOUS'])
+
+        # Use python to echo input to output (cross-platform)
+        cmd = [sys.executable, '-c', 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())']
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+        try:
+            # Should succeed now
+            p.stdin.write(contiguous_data)
+            out, _ = p.communicate()
+            self.assertEqual(out, contiguous_data.tobytes())
+
+        except Exception as e:
+            self.fail(f"Caught unexpected exception: {e}")
+
 if __name__ == "__main__":
     unittest.main()

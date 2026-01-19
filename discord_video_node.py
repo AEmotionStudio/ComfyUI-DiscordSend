@@ -640,7 +640,8 @@ class DiscordSendSaveVideo:
                     
                     # Convert tensor images to bytes
                     # Optimization: Use tensor_to_numpy_uint8 for faster conversion
-                    image_chunks = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
+                    # Ensure contiguity to avoid ValueError in subprocess.stdin.write
+                    image_chunks = map(lambda x: np.ascontiguousarray(tensor_to_numpy_uint8(x)), image_sequence)
                     
                     # Base ffmpeg arguments
                     args = [
@@ -697,7 +698,8 @@ class DiscordSendSaveVideo:
                     i_pix_fmt = 'rgb24'
 
                 # Optimization: Use tensor_to_numpy_uint8 for faster conversion
-                image_chunks = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
+                # Ensure contiguity to avoid ValueError in subprocess.stdin.write
+                image_chunks = map(lambda x: np.ascontiguousarray(tensor_to_numpy_uint8(x)), image_sequence)
                 
                 # Set up ffmpeg arguments based on format
                 loop_args = []
