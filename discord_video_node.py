@@ -640,7 +640,7 @@ class DiscordSendSaveVideo:
                     
                     # Convert tensor images to bytes
                     # Optimization: Use tensor_to_numpy_uint8 for faster conversion
-                    images_bytes = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
+                    image_chunks = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
                     
                     # Base ffmpeg arguments
                     args = [
@@ -660,9 +660,9 @@ class DiscordSendSaveVideo:
                         process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
                         
                         # Feed frames to ffmpeg
-                        for image_bytes in images_bytes:
+                        for chunk in image_chunks:
                             pbar.update(1)
-                            process.stdin.write(image_bytes)
+                            process.stdin.write(chunk)
                         
                         # Close stdin and get output
                         process.stdin.close()
@@ -697,7 +697,7 @@ class DiscordSendSaveVideo:
                     i_pix_fmt = 'rgb24'
 
                 # Optimization: Use tensor_to_numpy_uint8 for faster conversion
-                images_bytes = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
+                image_chunks = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
                 
                 # Set up ffmpeg arguments based on format
                 loop_args = []
@@ -793,9 +793,9 @@ class DiscordSendSaveVideo:
                     process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
                     
                     # Feed frames to ffmpeg
-                    for image_bytes in images_bytes:
+                    for chunk in image_chunks:
                         pbar.update(1)
-                        process.stdin.write(image_bytes)
+                        process.stdin.write(chunk)
                     
                     # Close stdin and get output
                     process.stdin.close()
@@ -855,7 +855,9 @@ class DiscordSendSaveVideo:
                             output_file_with_audio_path
                         ]
                         
-                        audio_data = a_waveform.squeeze(0).transpose(0,1).numpy()
+                        # Use ascontiguousarray to ensure the transposed array is C-contiguous.
+                        # This avoids BufferError in subprocess.run when using memoryview on non-contiguous arrays.
+                        audio_data = np.ascontiguousarray(a_waveform.squeeze(0).transpose(0,1).numpy())
                         
                         try:
                             # Use memoryview to avoid copy while satisfying subprocess.run input check
