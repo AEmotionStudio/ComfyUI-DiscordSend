@@ -12,3 +12,8 @@
 **Vulnerability:** Upstream APIs (like GitHub) may echo back sensitive request headers or credentials in their error response bodies (e.g., "Bad credentials: [TOKEN] is invalid"). Including raw `response.text` in application error messages or logs leaked these credentials.
 **Learning:** Never assume external API error responses are safe to log or display. They may contain sensitive data sent in the request (headers, body) or specific to the failure context.
 **Prevention:** Sanitize raw response bodies (`response.text`) before including them in error logs or exception messages. Scrub known sensitive patterns (like API tokens) from any external input before outputting it.
+
+## 2025-10-27 - GitHub Repo Traversal and Arbitrary File Write
+**Vulnerability:** `update_github_cdn_urls` accepted `github_repo` strings like `user/repo/../../victim/target` and `file_path` strings like `../secret.txt`, allowing path traversal. This could enable an attacker to manipulate files in arbitrary repositories the user's token had access to.
+**Learning:** Checking for the presence of a separator (like `/`) is not sufficient validation. Simple string concatenation for URL construction is dangerous when inputs can contain traversal sequences like `..`.
+**Prevention:** Strictly validate structural inputs against a whitelist regex (e.g., `^[\w.-]+/[\w.-]+$`). Reject any input containing path traversal sequences (`..`) or unexpected characters before using them in API calls.
