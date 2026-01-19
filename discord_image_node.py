@@ -44,7 +44,7 @@ class DiscordSendSaveImage:
         return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "The images to save and/or send to Discord."}),
-                "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files."}),
+                "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder."}),
                 "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last image instead of creating incrementing filenames."})
             },
             "optional": {
@@ -77,7 +77,7 @@ class DiscordSendSaveImage:
                 }),
                 "add_time": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Add the current time (HH-MM-SS) to filenames. ⚠️ Recommended for Discord to avoid caching issues."
+                    "tooltip": "Add the current time (HH-MM-SS) to filenames. ⚠️ Recommended for Discord to prevent caching of old images with the same name."
                 }),
                 "add_dimensions": ("BOOLEAN", {
                     "default": False,
