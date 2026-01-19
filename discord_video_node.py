@@ -640,7 +640,7 @@ class DiscordSendSaveVideo:
                     
                     # Convert tensor images to bytes
                     # Optimization: Use tensor_to_numpy_uint8 for faster conversion
-                    images_bytes = map(lambda x: tensor_to_numpy_uint8(x).tobytes(), image_sequence)
+                    images_bytes = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
                     
                     # Base ffmpeg arguments
                     args = [
@@ -697,7 +697,7 @@ class DiscordSendSaveVideo:
                     i_pix_fmt = 'rgb24'
 
                 # Optimization: Use tensor_to_numpy_uint8 for faster conversion
-                images_bytes = map(lambda x: tensor_to_numpy_uint8(x).tobytes(), image_sequence)
+                images_bytes = map(lambda x: tensor_to_numpy_uint8(x), image_sequence)
                 
                 # Set up ffmpeg arguments based on format
                 loop_args = []
@@ -855,10 +855,11 @@ class DiscordSendSaveVideo:
                             output_file_with_audio_path
                         ]
                         
-                        audio_data = a_waveform.squeeze(0).transpose(0,1).numpy().tobytes()
+                        audio_data = a_waveform.squeeze(0).transpose(0,1).numpy()
                         
                         try:
-                            res = subprocess.run(mux_args, input=audio_data, env=env, capture_output=True, check=True)
+                            # Use memoryview to avoid copy while satisfying subprocess.run input check
+                            res = subprocess.run(mux_args, input=memoryview(audio_data), env=env, capture_output=True, check=True)
                             if res.stderr:
                                 print(res.stderr.decode(*ENCODE_ARGS), end="", file=sys.stderr)
                             
