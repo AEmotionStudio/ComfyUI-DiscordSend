@@ -6,9 +6,41 @@ Handles updating GitHub repositories with Discord CDN URLs.
 
 import base64
 import time
+import re
 from typing import List, Optional, Tuple
 
 import requests
+
+
+def validate_github_repo(repo: str) -> bool:
+    """
+    Validate GitHub repository format (username/repo).
+    Strictly enforces alphanumeric, hyphens, underscores, and periods.
+    Prevents path traversal and injection.
+    """
+    if not repo:
+        return False
+    # Pattern: username/repo
+    # GitHub usernames: alphanumeric, hyphens (max 39 chars)
+    # Repo names: alphanumeric, hyphens, periods, underscores
+    pattern = r"^[a-zA-Z0-9-]+/[\w.-]+$"
+    return bool(re.match(pattern, repo))
+
+
+def validate_file_path(path: str) -> bool:
+    """
+    Validate file path for GitHub API.
+    Prevents path traversal (..) and absolute paths.
+    """
+    if not path:
+        return False
+    # Prevent traversal
+    if ".." in path:
+        return False
+    # Prevent absolute paths (GitHub API treats paths as relative to root)
+    if path.startswith("/"):
+        return False
+    return True
 
 
 def update_github_cdn_urls(
@@ -44,9 +76,13 @@ def update_github_cdn_urls(
     if not cdn_urls:
         return False, "No CDN URLs to update"
     
-    # Ensure repository format is valid
-    if "/" not in github_repo:
-        return False, f"Invalid GitHub repository format: {github_repo}. Expected format: username/repo"
+    # Strictly validate repository format to prevent traversal/injection
+    if not validate_github_repo(github_repo):
+        return False, f"Invalid GitHub repository format: {github_repo}. Expected format: username/repo (alphanumeric, hyphens, periods, underscores only)"
+
+    # Strictly validate file path to prevent traversal
+    if not validate_file_path(file_path):
+        return False, f"Invalid file path: {file_path}. Path traversal (..) and absolute paths are not allowed."
     
     # Setup API endpoint
     api_url = f"https://api.github.com/repos/{github_repo}/contents/{file_path}"
