@@ -8,7 +8,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-from bot.config import Config
+from bot.config import BotConfig
 from bot.bot import ComfyUIBot
 from discordsend_utils.logging_config import setup_logging
 
@@ -19,7 +19,7 @@ def main():
     
     # Load configuration
     try:
-        config = Config()
+        config = BotConfig.load()
     except Exception as e:
         logger.critical(f"Failed to load configuration: {e}")
         return
