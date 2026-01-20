@@ -101,21 +101,26 @@ class TestDiscordImageNodeOptimization(unittest.TestCase):
                 try:
                     # decode data
                     decoded = data.decode('latin-1')
-                    if '\0' in decoded:
+                except Exception:
+                    # Skip chunks that can't be decoded
+                    continue
+
+                if '\0' in decoded:
+                    try:
                         k, v = decoded.split('\0', 1)
+                    except ValueError:
+                        continue
 
-                        if k == "prompt":
-                            found_prompt = True
-                            # Verify sensitive data is gone
-                            self.assertNotIn("discord.com/api/webhooks", v)
-                            self.assertNotIn("ghp_", v)
+                    if k == "prompt":
+                        found_prompt = True
+                        # Verify sensitive data is gone
+                        self.assertNotIn("discord.com/api/webhooks", v)
+                        self.assertNotIn("ghp_", v)
 
-                        if k == "workflow":
-                            found_workflow = True
-                            self.assertNotIn("discord.com/api/webhooks", v)
-                            self.assertNotIn("ghp_", v)
-                except:
-                    pass
+                    if k == "workflow":
+                        found_workflow = True
+                        self.assertNotIn("discord.com/api/webhooks", v)
+                        self.assertNotIn("ghp_", v)
 
             self.assertTrue(found_prompt, "Prompt metadata not found")
             self.assertTrue(found_workflow, "Workflow metadata not found")
