@@ -47,23 +47,16 @@ def cached(max_size=None):
         return decorator(func)
     return decorator
 
-# Try to import dependencies from nodes.py
-try:
-    from discordsend_utils import ffmpeg_path, get_audio, hash_path, validate_path, requeue_workflow, \
-            gifski_path, calculate_file_hash, strip_path, try_download_video, is_url, \
-            imageOrLatent, BIGMAX, merge_filter_args, ENCODE_ARGS, floatOrInt
-    from comfy.utils import ProgressBar
-    has_vhs_formats = False  # Set to False since we're not using VHS formats anymore
-except ImportError:
-    print("Warning: Some dependencies from Video Helper Suite might be missing")
-    # Define minimal versions of required functions/classes
-    ffmpeg_path = None
-    ENCODE_ARGS = ("utf-8", "ignore")
-    floatOrInt = ("FLOAT", "INT")
-    imageOrLatent = ("IMAGE", "LATENT")
-    BIGMAX = 1000000
-    has_vhs_formats = False
+# Constants and configurations
+ffmpeg_path = None
+ENCODE_ARGS = ("utf-8", "ignore")
+has_vhs_formats = False
 
+# Try to import ComfyUI dependencies
+try:
+    from comfy.utils import ProgressBar
+except ImportError:
+    # Define minimal version of ProgressBar if not running in ComfyUI
     class ProgressBar:
         def __init__(self, total):
             self.total = total
