@@ -431,21 +431,12 @@ class DiscordSendSaveImage:
         if not args.disable_metadata:
             metadata = PngInfo()
             if prompt is not None:
-                # Prompt is already sanitized at start of function, but we double-check
-                # Note: sanitize_json_for_export is relatively expensive (recursion + regex)
-                # so doing this once per batch instead of per image is a big win
-                sanitized_prompt = sanitize_json_for_export(prompt)
-                metadata.add_text("prompt", json.dumps(sanitized_prompt))
+                # Prompt is already sanitized at start of function
+                metadata.add_text("prompt", json.dumps(prompt))
             if extra_pnginfo is not None:
                 # extra_pnginfo is already sanitized at start of function
-                sanitized_extra_pnginfo = sanitize_json_for_export(extra_pnginfo)
-                for x in sanitized_extra_pnginfo:
-                    if x == "workflow":
-                        # Extra sanitization for workflow data
-                        workflow_data = sanitize_json_for_export(sanitized_extra_pnginfo[x])
-                        metadata.add_text(x, json.dumps(workflow_data))
-                    else:
-                        metadata.add_text(x, json.dumps(sanitized_extra_pnginfo[x]))
+                for x in extra_pnginfo:
+                    metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
         for batch_number, image in enumerate(images):
             # Convert the tensor to a PIL image
