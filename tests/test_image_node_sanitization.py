@@ -57,6 +57,7 @@ class TestDiscordImageNodeOptimization(unittest.TestCase):
             "3": {
                 "inputs": {
                     "webhook_url": self.webhook_url,
+                    "github_token": self.github_token,
                     "seed": 123
                 },
                 "class_type": "DiscordSendSaveImage"
@@ -69,7 +70,7 @@ class TestDiscordImageNodeOptimization(unittest.TestCase):
                     {
                         "id": 3,
                         "type": "DiscordSendSaveImage",
-                        "widgets_values": [self.webhook_url, "message"]
+                        "widgets_values": [self.webhook_url, "message", self.github_token]
                     }
                 ]
             }
