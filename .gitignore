@@ -1,3 +1,15 @@
+# Sensitive files - NEVER commit these
+.env
+.env.*
+!.env.example
+config.yaml
+config.yml
+*.pem
+*.key
+secrets.*
+credentials.*
+
+# Python
 __pycache__/
 *.pyc
 Errors.md
