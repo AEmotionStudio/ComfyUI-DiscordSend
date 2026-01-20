@@ -876,13 +876,14 @@ class DiscordSendSaveVideo:
         
         # Send to Discord if requested
         if send_to_discord and webhook_url:
-            discord_optimized_file = None
             try:
                 # For Discord compatibility, create a special Discord-optimized copy of the video
                 # This is particularly important when add_time is disabled
-                input_file = output_files[-1]  # Get input file (the last output file)
-
+                discord_optimized_file = None
                 try:
+                    # Get input file (the last output file)
+                    input_file = output_files[-1]
+                    
                     # Create optimized output file in a temp location
                     temp_dir = folder_paths.get_temp_directory()
                     discord_optimized_file = os.path.join(temp_dir, f"discord_optimized_{uuid4()}{os.path.splitext(input_file)[1]}")
@@ -938,14 +939,13 @@ class DiscordSendSaveVideo:
                         print(f"Discord-optimized file created: {discord_optimized_file}")
                     else:
                         # If no optimization needed, just use the original file
-                        # Set to None to indicate we're using the original file so we don't clean it up
-                        discord_optimized_file = None
-                        print(f"Using original file for Discord: {input_file}")
+                        discord_optimized_file = input_file
+                        print(f"Using original file for Discord: {discord_optimized_file}")
                         
                 except Exception as e:
                     print(f"Warning: Failed to create Discord-optimized file: {str(e)}")
                     print("Falling back to original file")
-                    discord_optimized_file = None # Using original file
+                    discord_optimized_file = output_files[-1]
                 
                 # Prepare Discord files and message
                 discord_files = []
@@ -1366,8 +1366,7 @@ class DiscordSendSaveVideo:
                 files = []
                 
                 # Use our optimized file for Discord instead of the original
-                # If discord_optimized_file is None, it means we use the original file
-                file_path = discord_optimized_file if discord_optimized_file else input_file
+                file_path = discord_optimized_file
                 
                 try:
                     # Validate the video file before sending to Discord
@@ -1452,16 +1451,7 @@ class DiscordSendSaveVideo:
             except Exception as e:
                 print(f"Error sending to Discord: {str(e)}")
                 discord_send_success = False
-
-            finally:
-                # Security: Ensure temporary optimized file is deleted to prevent disk filling
-                if discord_optimized_file and os.path.exists(discord_optimized_file):
-                    try:
-                        os.remove(discord_optimized_file)
-                        print(f"Cleaned up temporary file: {discord_optimized_file}")
-                    except Exception as e:
-                        print(f"Error cleaning up temporary file: {e}")
-
+                
             # If we have CDN URLs and the option is enabled, send them as a text file
             if save_cdn_urls and discord_cdn_urls:
                 try:
