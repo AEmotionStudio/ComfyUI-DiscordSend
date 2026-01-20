@@ -17,3 +17,8 @@
 **Vulnerability:** `update_github_cdn_urls` accepted `github_repo` strings like `user/repo/../../victim/target` and `file_path` strings like `../secret.txt`, allowing path traversal. This could enable an attacker to manipulate files in arbitrary repositories the user's token had access to.
 **Learning:** Checking for the presence of a separator (like `/`) is not sufficient validation. Simple string concatenation for URL construction is dangerous when inputs can contain traversal sequences like `..`.
 **Prevention:** Strictly validate structural inputs against a whitelist regex (e.g., `^[\w.-]+/[\w.-]+$`). Reject any input containing path traversal sequences (`..`) or unexpected characters before using them in API calls.
+
+## 2026-01-20 - Resource Exhaustion via Unbounded Temporary Files
+**Vulnerability:** The video node created temporary copies of videos (`discord_optimized_*`) to ensure Discord compatibility but failed to delete them. In long-running environments, this could fill the disk storage, leading to a Denial of Service (DoS).
+**Learning:** Temporary files created for specific operations (like upload optimization) must be explicitly managed and cleaned up, regardless of success or failure of the operation. Relying on OS or application-level temp directory cleaning is insufficient for large media files.
+**Prevention:** Use `try...finally` blocks to guarantee cleanup of temporary resources. Explicitly track created temporary artifacts and verify their deletion.
