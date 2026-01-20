@@ -22,7 +22,13 @@ from shared import (
     update_github_cdn_urls,
     extract_prompts_from_workflow,
     send_to_discord_with_retry,
-    tensor_to_numpy_uint8
+    tensor_to_numpy_uint8,
+    build_filename_with_metadata,
+    get_output_directory,
+    build_metadata_section,
+    build_prompt_section,
+    extract_cdn_urls_from_response,
+    send_cdn_urls_file
 )
 
 
@@ -240,48 +246,24 @@ class DiscordSendSaveImage:
             if send_workflow_json and extra_pnginfo is not None and "workflow" in extra_pnginfo:
                 extra_pnginfo["workflow"] = sanitize_json_for_export(extra_pnginfo["workflow"])
         
-        # Add date and/or time if enabled
-        date_time_parts = []
-        
-        # Prepare info for Discord message
+        # Build filename with date/time metadata using shared utility
         image_info = {}
-        
-        if add_date:
-            # Get ONLY the date in YYYY-MM-DD format
-            current_date = time.strftime("%Y-%m-%d")
-            date_time_parts.append(current_date)
-            print(f"Adding date to filename: {current_date}")
-            image_info["date"] = current_date
-            
-        if add_time:
-            # Get ONLY the time in HH-MM-SS format
-            current_time = time.strftime("%H-%M-%S")
-            date_time_parts.append(current_time)
-            print(f"Adding time to filename: {current_time}")
-            image_info["time"] = current_time
-        
-        # Add date/time components to filename prefix if any were enabled
-        if date_time_parts:
-            date_time_suffix = "_" + "_".join(date_time_parts)
-            filename_prefix += date_time_suffix
-            print(f"Final timestamp suffix: {date_time_suffix}")
-            
+        filename_prefix, image_info = build_filename_with_metadata(
+            prefix=filename_prefix,
+            add_date=add_date,
+            add_time=add_time,
+            info_dict=image_info
+        )
+
         # Add prefix append
         filename_prefix += self.prefix_append
         
-        # Get ComfyUI output directory for safe path handling
-        comfy_output_dir = folder_paths.get_output_directory()
-        
-        # Choose destination directory based on save_output flag
-        if save_output:
-            # Create a output subfolder in the ComfyUI output directory
-            dest_folder = os.path.join(comfy_output_dir, "discord_output")
-            os.makedirs(dest_folder, exist_ok=True)
-        else:
-            # Use ComfyUI's temporary directory for preview-only files
-            dest_folder = folder_paths.get_temp_directory()
-            os.makedirs(dest_folder, exist_ok=True)
-            print(f"Using temporary directory for preview: {dest_folder}")
+        # Get output directory using shared utility
+        dest_folder = get_output_directory(
+            save_output=save_output,
+            comfy_output_dir=folder_paths.get_output_directory(),
+            temp_dir=folder_paths.get_temp_directory()
+        )
         
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
@@ -358,71 +340,39 @@ class DiscordSendSaveImage:
         elif send_to_discord and not webhook_url:
             print("Discord integration was enabled but no webhook URL was provided")
         
-        # Add image info to Discord message if relevant options are enabled
+        # Build image info message using shared utility
         if send_to_discord and webhook_url and (add_date or add_time or add_dimensions or resize_to_power_of_2 or include_format_in_message):
-            info_message = "\n\n**Image Information:**\n"
-            
-            if "date" in image_info:
-                info_message += f"**Date:** {image_info['date']}\n"
-                
-            if "time" in image_info:
-                info_message += f"**Time:** {image_info['time']}\n"
-            
-            # Add format to the message if the option is enabled
-            if include_format_in_message:
-                info_message += f"**Format:** {file_format.upper()}\n"
-            
-            # Update the message prefix with the information
+            info_message = build_metadata_section(
+                info_dict=image_info,
+                include_date=add_date,
+                include_time=add_time,
+                include_dimensions=False,  # Dimensions added later after processing
+                include_format=include_format_in_message,
+                file_format=file_format,
+                section_title="Image Information"
+            )
             image_info["message_prefix"] = info_message
-            
-            # Note: We don't add to discord_message yet, as dimensions aren't known until processing
             print("Prepared image information section for Discord message")
-        
-        # Extract prompts if requested
+
+        # Extract and build prompts section using shared utilities
         if send_to_discord and include_prompts_in_message:
             workflow_data = None
-            
+
             # First try to get workflow from extra_pnginfo
             if original_extra_pnginfo is not None and isinstance(original_extra_pnginfo, dict) and "workflow" in original_extra_pnginfo:
                 workflow_data = original_extra_pnginfo["workflow"]
-            
+
             # If no workflow in extra_pnginfo, check if prompt is actually a workflow
             if workflow_data is None and original_prompt is not None:
-                # Check if prompt is already a workflow
                 if isinstance(original_prompt, dict) and "nodes" in original_prompt:
                     workflow_data = original_prompt
-            
-            # Extract prompts from workflow data
+
+            # Extract and build prompts section
             if workflow_data is not None:
                 positive_prompt, negative_prompt = extract_prompts_from_workflow(workflow_data)
-                
-                # Ensure the prompts are strings or None
-                if positive_prompt is not False and positive_prompt is not None and not isinstance(positive_prompt, str):
-                    positive_prompt = str(positive_prompt)
-                    print(f"Converted positive prompt to string: {positive_prompt[:50]}...")
-                
-                if negative_prompt is not False and negative_prompt is not None and not isinstance(negative_prompt, str):
-                    negative_prompt = str(negative_prompt)
-                    print(f"Converted negative prompt to string: {negative_prompt[:50]}...")
-                
-                # Check if we have valid prompt data
-                has_valid_prompt = (
-                    (isinstance(positive_prompt, str) and positive_prompt) or 
-                    (isinstance(negative_prompt, str) and negative_prompt)
-                )
-                
-                # Add prompts to Discord message if found
-                if has_valid_prompt:
-                    prompt_message = "\n\n**Generation Prompts:**\n"
-                    
-                    if isinstance(positive_prompt, str) and positive_prompt:
-                        prompt_message += f"**Positive:**\n```\n{positive_prompt}\n```\n"
-                        
-                    if isinstance(negative_prompt, str) and negative_prompt:
-                        prompt_message += f"**Negative:**\n```\n{negative_prompt}\n```\n"
-                    
-                    # Store prompt message for adding after image info
-                    image_info["prompt_message"] = prompt_message
+                prompt_section = build_prompt_section(positive_prompt, negative_prompt)
+                if prompt_section:
+                    image_info["prompt_message"] = prompt_section
                     print("Prepared prompts for Discord message")
         
         # Optimization: Create metadata once for the entire batch
@@ -495,17 +445,26 @@ class DiscordSendSaveImage:
                 # Add image info if available
                 if "message_prefix" in image_info:
                     info_message = image_info["message_prefix"]
-                    
+
+                    # Check if we need to add dimensions
+                    has_resize_dimensions = "original_dimensions" in image_info and "resized_dimensions" in image_info
+                    has_dimensions = "dimensions" in image_info
+
+                    # Add section header if dimensions will be added but no other metadata exists
+                    if (has_resize_dimensions or has_dimensions) and not info_message:
+                        info_message = "\n\n**Image Information:**\n"
+
                     # Add dimensions info if available
-                    if "original_dimensions" in image_info and "resized_dimensions" in image_info:
+                    if has_resize_dimensions:
                         info_message += f"**Original Dimensions:** {image_info['original_dimensions']}\n"
                         info_message += f"**Resized Dimensions:** {image_info['resized_dimensions']} (Power of 2)\n"
-                    elif "dimensions" in image_info:
+                    elif has_dimensions:
                         info_message += f"**Dimensions:** {image_info['dimensions']}\n"
-                    
+
                     # Add the complete info message to the Discord message
-                    discord_message += info_message
-                    print("Added image information to Discord message")
+                    if info_message:
+                        discord_message += info_message
+                        print("Added image information to Discord message")
                 
                 # Add prompts after image info if available (decoupled from image info presence)
                 if "prompt_message" in image_info:
@@ -712,58 +671,18 @@ class DiscordSendSaveImage:
                                     if send_workflow_json and "workflow" in files:
                                         print(f"Successfully sent workflow JSON for image {batch_number+1}")
                                     
-                                    # Try to extract CDN URLs from batch response
+                                    # Extract CDN URLs and send file using shared utility
+                                    # Only extract when status is 200 (has content), not 204 (no content)
                                     if save_cdn_urls and response.status_code == 200:
-                                        try:
-                                            response_data = response.json()
-                                            print(f"Received JSON response from Discord with {len(response_data) if isinstance(response_data, dict) else 'invalid'} fields")
-                                            
-                                            if "attachments" in response_data and isinstance(response_data["attachments"], list):
-                                                print(f"Found {len(response_data['attachments'])} attachments in Discord response")
-                                                
-                                                for idx, attachment in enumerate(response_data["attachments"]):
-                                                    if "url" in attachment and "filename" in attachment:
-                                                        # Filter out workflow JSON files from URLs list
-                                                        if not attachment["filename"].endswith(".json"):
-                                                            batch_cdn_urls.append((attachment["filename"], attachment["url"]))
-                                                            print(f"Extracted CDN URL for batch image {idx+1}: {attachment['url']}")
-                                                        else:
-                                                            print(f"Skipping JSON file: {attachment['filename']}")
-                                                    else:
-                                                        print(f"Attachment {idx+1} missing URL or filename: {attachment.keys()}")
-                                                
-                                                print(f"Total batch CDN URLs collected: {len(batch_cdn_urls)}")
-                                                
-                                                # Create and send a text file with the CDN URLs if we have any
-                                                if batch_cdn_urls:
-                                                    try:
-                                                        # Create the text file content
-                                                        url_text_content = "# Discord CDN URLs\n\n"
-                                                        for idx, (filename, url) in enumerate(batch_cdn_urls):
-                                                            url_text_content += f"{idx+1}. {filename}: {url}\n"
-                                                        
-                                                        # Create a unique filename for the text file
-                                                        urls_filename = f"cdn_urls-{uuid4()}.txt"
-                                                        
-                                                        # Prepare the request with just the URL file
-                                                        url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
-                                                        url_data = {"content": "Discord CDN URLs for the uploaded images:"}
-                                                        
-                                                        # Send a follow-up message with just the URLs text file
-                                                        url_response = send_to_discord_with_retry(
-                                                            webhook_url,
-                                                            files=url_files,
-                                                            data=url_data
-                                                        )
-                                                        
-                                                        if url_response.status_code in [200, 204]:
-                                                            print(f"Successfully sent CDN URLs text file to Discord")
-                                                        else:
-                                                            print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
-                                                    except Exception as e:
-                                                        print(f"Error creating or sending CDN URLs text file: {e}")
-                                        except Exception as e:
-                                            print(f"Error extracting CDN URLs from batch response: {e}")
+                                        new_urls = extract_cdn_urls_from_response(response)
+                                        batch_cdn_urls.extend(new_urls)
+                                        if batch_cdn_urls:
+                                            send_cdn_urls_file(
+                                                webhook_url=webhook_url,
+                                                urls=batch_cdn_urls,
+                                                send_func=send_to_discord_with_retry,
+                                                message="Discord CDN URLs for the uploaded images:"
+                                            )
                                 else:
                                     print(f"Error: Discord returned status code {response.status_code}")
                                     discord_send_success = False
@@ -792,32 +711,12 @@ class DiscordSendSaveImage:
                 
                 # If we have CDN URLs and we're not in batch mode, send them as a text file
                 if save_cdn_urls and discord_cdn_urls and not (group_batched_images and len(images) > 1):
-                    try:
-                        # Create the text file content
-                        url_text_content = "# Discord CDN URLs\n\n"
-                        for idx, (filename, url) in enumerate(discord_cdn_urls):
-                            url_text_content += f"{idx+1}. {filename}: {url}\n"
-                        
-                        # Create a unique filename for the text file
-                        urls_filename = f"cdn_urls-{uuid4()}.txt"
-                        
-                        # Prepare the request with just the URL file
-                        url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
-                        url_data = {"content": "Discord CDN URLs for the uploaded images:"}
-                        
-                        # Send a follow-up message with just the URLs text file
-                        url_response = send_to_discord_with_retry(
-                            webhook_url,
-                            files=url_files,
-                            data=url_data
-                        )
-                        
-                        if url_response.status_code in [200, 204]:
-                            print(f"Successfully sent CDN URLs text file to Discord")
-                        else:
-                            print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
-                    except Exception as e:
-                        print(f"Error creating or sending CDN URLs text file: {e}")
+                    send_cdn_urls_file(
+                        webhook_url=webhook_url,
+                        urls=discord_cdn_urls,
+                        send_func=send_to_discord_with_retry,
+                        message="Discord CDN URLs for the uploaded images:"
+                    )
             elif send_to_discord and not discord_send_success:
                 print("DiscordSendSaveImage: There were errors sending some images to Discord")
         else:
@@ -861,61 +760,21 @@ class DiscordSendSaveImage:
                     print(f"Successfully sent batch of {len(batch_discord_files)} images to Discord as a gallery")
                     discord_send_success = True
                     discord_sent_files = ["batch_gallery"]  # Mark as successfully sent
-                    
-                    # Try to extract CDN URLs from batch response
+
+                    # Extract CDN URLs and send file using shared utility
+                    # Only extract when status is 200 (has content), not 204 (no content)
                     if save_cdn_urls and response.status_code == 200:
-                        try:
-                            response_data = response.json()
-                            print(f"Received JSON response from Discord with {len(response_data) if isinstance(response_data, dict) else 'invalid'} fields")
-                            
-                            if "attachments" in response_data and isinstance(response_data["attachments"], list):
-                                print(f"Found {len(response_data['attachments'])} attachments in Discord response")
-                                
-                                for idx, attachment in enumerate(response_data["attachments"]):
-                                    if "url" in attachment and "filename" in attachment:
-                                        # Filter out workflow JSON files from URLs list
-                                        if not attachment["filename"].endswith(".json"):
-                                            batch_cdn_urls.append((attachment["filename"], attachment["url"]))
-                                            print(f"Extracted CDN URL for batch image {idx+1}: {attachment['url']}")
-                                        else:
-                                            print(f"Skipping JSON file: {attachment['filename']}")
-                                    else:
-                                        print(f"Attachment {idx+1} missing URL or filename: {attachment.keys()}")
-                                
-                                print(f"Total batch CDN URLs collected: {len(batch_cdn_urls)}")
-                                
-                                # Create and send a text file with the CDN URLs if we have any
-                                if batch_cdn_urls:
-                                    try:
-                                        # Create the text file content
-                                        url_text_content = "# Discord CDN URLs\n\n"
-                                        for idx, (filename, url) in enumerate(batch_cdn_urls):
-                                            url_text_content += f"{idx+1}. {filename}: {url}\n"
-                                        
-                                        # Create a unique filename for the text file
-                                        urls_filename = f"cdn_urls-{uuid4()}.txt"
-                                        
-                                        # Prepare the request with just the URL file
-                                        url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
-                                        url_data = {"content": "Discord CDN URLs for the uploaded images:"}
-                                        
-                                        # Send a follow-up message with just the URLs text file
-                                        url_response = send_to_discord_with_retry(
-                                            webhook_url,
-                                            files=url_files,
-                                            data=url_data
-                                        )
-                                        
-                                        if url_response.status_code in [200, 204]:
-                                            print(f"Successfully sent CDN URLs text file to Discord")
-                                        else:
-                                            print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
-                                    except Exception as e:
-                                        print(f"Error creating or sending CDN URLs text file: {e}")
-                        except Exception as e:
-                            print(f"Error extracting CDN URLs from batch response: {e}")
-                    else:
-                        print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
+                        new_urls = extract_cdn_urls_from_response(response)
+                        batch_cdn_urls.extend(new_urls)
+                        if batch_cdn_urls:
+                            send_cdn_urls_file(
+                                webhook_url=webhook_url,
+                                urls=batch_cdn_urls,
+                                send_func=send_to_discord_with_retry,
+                                message="Discord CDN URLs for the uploaded images:"
+                            )
+                else:
+                    print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
                     discord_send_success = False
             except Exception as e:
                 print(f"Error sending batch to Discord: {e}")

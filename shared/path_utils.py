@@ -1,0 +1,83 @@
+"""
+Path utilities for ComfyUI-DiscordSend
+
+Provides functions for handling output directories and file paths.
+"""
+
+import os
+from typing import Optional
+
+
+def get_output_directory(
+    save_output: bool,
+    comfy_output_dir: str,
+    temp_dir: str,
+    subfolder: str = "discord_output"
+) -> str:
+    """
+    Determine the appropriate output directory based on save settings.
+
+    Args:
+        save_output: Whether files should be saved permanently
+        comfy_output_dir: ComfyUI's output directory path
+        temp_dir: ComfyUI's temporary directory path
+        subfolder: Subfolder name within output directory (default: "discord_output")
+
+    Returns:
+        Path to the destination directory
+    """
+    if save_output:
+        # Create output subfolder in the ComfyUI output directory
+        dest_folder = os.path.join(comfy_output_dir, subfolder)
+        os.makedirs(dest_folder, exist_ok=True)
+    else:
+        # Use ComfyUI's temporary directory for preview-only files
+        dest_folder = temp_dir
+        os.makedirs(dest_folder, exist_ok=True)
+        print(f"Using temporary directory for preview: {dest_folder}")
+
+    return dest_folder
+
+
+def ensure_directory_exists(path: str) -> str:
+    """
+    Ensure a directory exists, creating it if necessary.
+
+    Args:
+        path: Directory path to ensure exists
+
+    Returns:
+        The same path (for chaining)
+    """
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_unique_filepath(
+    directory: str,
+    filename: str,
+    extension: str,
+    counter: Optional[int] = None
+) -> str:
+    """
+    Generate a unique filepath, optionally with a counter.
+
+    Args:
+        directory: Base directory
+        filename: Base filename (without extension)
+        extension: File extension (with or without leading dot)
+        counter: Optional counter to append to filename
+
+    Returns:
+        Full filepath
+    """
+    # Ensure extension has leading dot
+    if not extension.startswith("."):
+        extension = "." + extension
+
+    if counter is not None:
+        full_filename = f"{filename}_{counter:05d}{extension}"
+    else:
+        full_filename = f"{filename}{extension}"
+
+    return os.path.join(directory, full_filename)

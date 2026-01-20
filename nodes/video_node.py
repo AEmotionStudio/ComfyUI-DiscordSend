@@ -24,7 +24,25 @@ import functools
 import server
 
 # Import shared utilities
-from shared import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry, tensor_to_numpy_uint8
+from shared import (
+    sanitize_json_for_export,
+    update_github_cdn_urls,
+    send_to_discord_with_retry,
+    tensor_to_numpy_uint8,
+    build_filename_with_metadata,
+    get_output_directory,
+    build_metadata_section,
+    build_prompt_section,
+    extract_cdn_urls_from_response,
+    send_cdn_urls_file,
+    extract_prompts_from_workflow
+)
+from shared.media import (
+    validate_video_for_discord,
+    normalize_video_extension,
+    optimize_video_for_discord as shared_optimize_video,
+    detect_ffmpeg
+)
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -47,13 +65,15 @@ def cached(max_size=None):
         return decorator(func)
     return decorator
 
-# Define constants and variables previously imported from discordsend_utils
-ffmpeg_path = None
+# Define constants
 ENCODE_ARGS = ("utf-8", "ignore")
 floatOrInt = ("FLOAT", "INT")
 imageOrLatent = ("IMAGE", "LATENT")
 BIGMAX = 1000000
 has_vhs_formats = False
+
+# Detect ffmpeg using shared utility
+ffmpeg_path = detect_ffmpeg()
 
 # Try to import ProgressBar from comfy.utils
 try:
@@ -63,67 +83,10 @@ except ImportError:
         def __init__(self, total):
             self.total = total
             self.current = 0
-        
+
         def update(self, advance=1):
             self.current += advance
             print(f"Progress: {self.current}/{self.total}", end="\r")
-
-# Fallback if ffmpeg_path is None, try to detect it
-if ffmpeg_path is None:
-    # Try direct detection methods for ffmpeg
-    try:
-        # Try imageio-ffmpeg first (common in Python environments)
-        try:
-            import imageio_ffmpeg
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-            print(f"Found ffmpeg via imageio_ffmpeg: {ffmpeg_path}")
-        except (ImportError, Exception):
-            # Fall back to checking the system path
-            from shutil import which
-            ffmpeg_path = which("ffmpeg")
-            if ffmpeg_path:
-                print(f"Found ffmpeg in system path: {ffmpeg_path}")
-    except Exception as e:
-        print(f"Error during ffmpeg detection: {str(e)}")
-
-# Function to validate video files for Discord compatibility
-def validate_video_for_discord(file_path):
-    """
-    Validate that a video file is compatible with Discord.
-    Returns a tuple of (is_valid, message)
-    """
-    if not os.path.exists(file_path):
-        return False, f"File does not exist: {file_path}"
-    
-    # Check if file is empty or too small
-    file_size = os.path.getsize(file_path)
-    if file_size == 0:
-        return False, "File is empty"
-    if file_size < 1024:  # Less than 1KB
-        return False, f"File is suspiciously small: {file_size} bytes"
-    
-    # Check if file is too large for Discord (Discord limit is 25MB for regular users, 50MB for Nitro)
-    max_size = 25 * 1024 * 1024  # 25MB in bytes
-    if file_size > max_size:
-        return False, f"File exceeds Discord's size limit: {file_size} bytes (max {max_size} bytes)"
-    
-    # Get file extension
-    ext = os.path.splitext(file_path)[1].lower().lstrip('.')
-    
-    # Return validation result based on file type
-    if ext in ['mp4', 'webm', 'gif']:
-        # These formats are well supported by Discord
-        return True, "Valid video format for Discord"
-    elif ext in ['mov']:
-        # MOV files (ProRes) may need conversion for Discord
-        return False, "MOV files may need conversion for Discord compatibility"
-    elif ext in ['png']:
-        # PNG sequences are not directly supported by Discord
-        return False, "PNG sequences are not directly supported by Discord and require compilation into a video format"
-    else:
-        # For any other extension, warn but allow sending
-        return False, f"Unknown format {ext}, may not be compatible with Discord"
-
 class DiscordSendSaveVideo:
     """
     A ComfyUI node that can send videos to Discord and save them with advanced options.
@@ -361,57 +324,28 @@ class DiscordSendSaveVideo:
         # Get first image for metadata
         first_image = images[0]
         
-        # Add date and/or time if enabled
-        date_time_parts = []
-        
-        # Video info for Discord message
+        # Build filename with date/time/dimensions metadata using shared utility
+        height, width = images[0].shape[0], images[0].shape[1]
         video_info = {}
-        
-        if add_date:
-            # Get ONLY the date in YYYY-MM-DD format
-            current_date = time.strftime("%Y-%m-%d")
-            date_time_parts.append(current_date)
-            print(f"Adding date to filename: {current_date}")
-            video_info["date"] = current_date
-            
-        if add_time:
-            # Get ONLY the time in HH-MM-SS format
-            current_time = time.strftime("%H-%M-%S")
-            date_time_parts.append(current_time)
-            print(f"Adding time to filename: {current_time}")
-            video_info["time"] = current_time
-            
-        # Add dimensions if enabled
-        if add_dimensions:
-            # Get dimensions from first frame
-            height, width = images[0].shape[0], images[0].shape[1]
-            dim_text = f"{width}x{height}"
-            date_time_parts.append(dim_text)
-            print(f"Adding dimensions to filename: {dim_text}")
-            video_info["dimensions"] = dim_text
-        
-        # Add date/time/dimensions components to filename prefix if any were enabled
-        if date_time_parts:
-            date_time_suffix = "_" + "_".join(date_time_parts)
-            filename_prefix += date_time_suffix
-            print(f"Final metadata suffix: {date_time_suffix}")
-            
+        filename_prefix, video_info = build_filename_with_metadata(
+            prefix=filename_prefix,
+            add_date=add_date,
+            add_time=add_time,
+            add_dimensions=add_dimensions,
+            width=width,
+            height=height,
+            info_dict=video_info
+        )
+
         # Add prefix append
         filename_prefix += self.prefix_append
-        
-        # Get ComfyUI output directory for safe path handling
-        comfy_output_dir = folder_paths.get_output_directory()
-        
-        # Choose destination directory based on save_output flag
-        if save_output:
-            # Create a video output subfolder in the ComfyUI output directory
-            dest_folder = os.path.join(comfy_output_dir, "discord_output")
-            os.makedirs(dest_folder, exist_ok=True)
-        else:
-            # Use ComfyUI's temporary directory for preview-only files
-            dest_folder = folder_paths.get_temp_directory()
-            os.makedirs(dest_folder, exist_ok=True)
-            print(f"Using temporary directory for preview: {dest_folder}")
+
+        # Get output directory using shared utility
+        dest_folder = get_output_directory(
+            save_output=save_output,
+            comfy_output_dir=folder_paths.get_output_directory(),
+            temp_dir=folder_paths.get_temp_directory()
+        )
             
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
@@ -874,73 +808,13 @@ class DiscordSendSaveVideo:
             discord_optimized_file = None
             try:
                 # For Discord compatibility, create a special Discord-optimized copy of the video
-                # This is particularly important when add_time is disabled
                 input_file = output_files[-1]  # Get input file (the last output file)
+                temp_dir = folder_paths.get_temp_directory()
 
-                try:
-                    # Create optimized output file in a temp location
-                    temp_dir = folder_paths.get_temp_directory()
-                    discord_optimized_file = os.path.join(temp_dir, f"discord_optimized_{uuid4()}{os.path.splitext(input_file)[1]}")
-                    
-                    # Set up ffmpeg arguments for optimized Discord conversion
-                    # This creates a new file specifically optimized for Discord playback
-                    format_ext = os.path.splitext(input_file)[1].lstrip('.').lower()
-                    optimize_args = []
-                    
-                    if format_ext == "mp4":
-                        # MP4 optimization for Discord
-                        optimize_args = [
-                            ffmpeg_path, "-i", input_file,
-                            "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                            "-movflags", "faststart", "-preset", "fast",
-                            "-profile:v", "baseline", "-level", "3.0",
-                            "-crf", "23"
-                        ]
-                        
-                        # Add audio if present in original file
-                        optimize_args.extend(["-c:a", "aac", "-b:a", "128k"])
-                        
-                        # Add output file
-                        optimize_args.append(discord_optimized_file)
-                    elif format_ext == "webm":
-                        # WebM optimization for Discord
-                        optimize_args = [
-                            ffmpeg_path, "-i", input_file,
-                            "-c:v", "libvpx-vp9", 
-                            "-pix_fmt", "yuv420p",
-                            "-crf", "30", "-b:v", "0",
-                            "-deadline", "good"
-                        ]
-                        
-                        # Add audio if present in original file
-                        optimize_args.extend(["-c:a", "libopus", "-b:a", "96k"])
-                        
-                        # Add output file
-                        optimize_args.append(discord_optimized_file)
-                    elif format_ext == "gif":
-                        # GIF optimization for Discord
-                        optimize_args = [
-                            ffmpeg_path, "-i", input_file,
-                            "-vf", "fps=15,scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                        ]
-                        
-                        # Add output file
-                        optimize_args.append(discord_optimized_file)
-                    
-                    if optimize_args:
-                        print(f"Creating Discord-optimized version of {format_ext.upper()} file...")
-                        subprocess.run(optimize_args, check=True, capture_output=True)
-                        print(f"Discord-optimized file created: {discord_optimized_file}")
-                    else:
-                        # If no optimization needed, just use the original file
-                        # Set to None to indicate we're using the original file so we don't clean it up
-                        discord_optimized_file = None
-                        print(f"Using original file for Discord: {input_file}")
-                        
-                except Exception as e:
-                    print(f"Warning: Failed to create Discord-optimized file: {str(e)}")
-                    print("Falling back to original file")
-                    discord_optimized_file = None # Using original file
+                # Use shared utility for Discord optimization
+                discord_optimized_file = shared_optimize_video(input_file, ffmpeg_path, temp_dir)
+                if discord_optimized_file is None:
+                    print(f"Using original file for Discord: {input_file}")
                 
                 # Prepare Discord files and message
                 discord_files = []
@@ -982,364 +856,45 @@ class DiscordSendSaveVideo:
                 
                 # Prepare message content
                 message_content = discord_message
-                
-                # Add video metadata information to Discord message when enabled
-                video_metadata_text = ""
-                
-                # Only build video metadata text if the option is enabled
+
+                # Add video metadata to Discord message using shared utility
                 if include_video_info:
-                    # Add date if enabled
-                    if add_date and "date" in video_info:
-                        video_metadata_text += f"**Date**: {video_info['date']}\n"
-                    
-                    # Add time if enabled
-                    if add_time and "time" in video_info:
-                        video_metadata_text += f"**Time**: {video_info['time']}\n"
-                    
-                    # Add dimensions if enabled
-                    if add_dimensions and "dimensions" in video_info:
-                        video_metadata_text += f"**Dimensions**: {video_info['dimensions']}\n"
-                    
-                    # Add frame rate information
-                    video_metadata_text += f"**Frame Rate**: {frame_rate} fps\n"
-                    
-                    # Add format information
-                    video_metadata_text += f"**Format**: {format}\n"
-                    
-                    # Add video metadata to message if any was collected
-                    if video_metadata_text and message_content:
-                        message_content += "\n\n**Video Info**:\n" + video_metadata_text
-                        print(f"Added video metadata to Discord message: {len(video_metadata_text)} chars")
-                    elif video_metadata_text:
-                        message_content = "**Video Info**:\n" + video_metadata_text
-                        print(f"Added video metadata to Discord message: {len(video_metadata_text)} chars")
+                    metadata_section = build_metadata_section(
+                        info_dict=video_info,
+                        include_date=add_date,
+                        include_time=add_time,
+                        include_dimensions=add_dimensions,
+                        include_format=True,
+                        file_format=format,
+                        frame_rate=frame_rate,
+                        section_title="Video Info"
+                    )
+                    if metadata_section:
+                        message_content += metadata_section
+                        print(f"Added video metadata to Discord message: {len(metadata_section)} chars")
                 else:
                     print("Video info was not included in Discord message (disabled by user)")
                 
-                # Include the generation prompts if requested
+                # Include the generation prompts if requested using shared utilities
                 if include_prompts_in_message:
-                    print(f"Prompt inclusion requested! Starting prompt extraction process...")
-                    print(f"original_prompt type: {type(original_prompt) if original_prompt is not None else 'None'}")
-                    print(f"original_extra_pnginfo type: {type(original_extra_pnginfo) if original_extra_pnginfo is not None else 'None'}")
-                    
-                    if original_prompt is not None:
-                        print(f"original_prompt keys: {original_prompt.keys() if isinstance(original_prompt, dict) else 'Not a dict'}")
-                    
-                    if original_extra_pnginfo is not None:
-                        print(f"original_extra_pnginfo keys: {original_extra_pnginfo.keys() if isinstance(original_extra_pnginfo, dict) else 'Not a dict'}")
-                        if isinstance(original_extra_pnginfo, dict) and "workflow" in original_extra_pnginfo:
-                            print(f"workflow keys: {original_extra_pnginfo['workflow'].keys() if isinstance(original_extra_pnginfo['workflow'], dict) else 'Workflow not a dict'}")
-                    
-                    # First identify the workflow data to extract prompts from
                     workflow_data = None
-                    
+
                     # First try to get workflow from extra_pnginfo
                     if original_extra_pnginfo is not None and isinstance(original_extra_pnginfo, dict) and "workflow" in original_extra_pnginfo:
                         workflow_data = original_extra_pnginfo["workflow"]
-                        print("Found workflow data in extra_pnginfo")
-                    
+
                     # If no workflow in extra_pnginfo, check if prompt is actually a workflow
                     if workflow_data is None and original_prompt is not None:
-                        # Check if prompt is already a workflow
                         if isinstance(original_prompt, dict) and "nodes" in original_prompt:
                             workflow_data = original_prompt
-                            print("Found workflow data in original_prompt")
-                    
-                    # Extract prompts if we found workflow data
+
+                    # Extract and build prompts section using shared utilities
                     if workflow_data is not None:
-                        print("Workflow data found, attempting to extract prompts...")
-                        
-                        # Extract prompts and add to message
-                        try:
-                            # Try to use discord_image_node's function first
-                            try:
-                                from discord_image_node import extract_prompts_from_workflow
-                                positive_prompt, negative_prompt = extract_prompts_from_workflow(workflow_data)
-                                
-                                print(f"extract_prompts_from_workflow returned: positive_type={type(positive_prompt)}, negative_type={type(negative_prompt)}")
-                                
-                                # Ensure the prompts are strings or None
-                                if positive_prompt is not False and positive_prompt is not None and not isinstance(positive_prompt, str):
-                                    positive_prompt = str(positive_prompt)
-                                    print(f"Converted positive prompt to string: {positive_prompt[:50]}...")
-                                
-                                if negative_prompt is not False and negative_prompt is not None and not isinstance(negative_prompt, str):
-                                    negative_prompt = str(negative_prompt)
-                                    print(f"Converted negative prompt to string: {negative_prompt[:50]}...")
-                                
-                                # Check if we have valid prompt data
-                                has_valid_prompt = (
-                                    (isinstance(positive_prompt, str) and positive_prompt) or 
-                                    (isinstance(negative_prompt, str) and negative_prompt)
-                                )
-                                
-                                if has_valid_prompt:
-                                    print(f"Successfully extracted prompts via discord_image_node")
-                                    
-                                    # Add to message
-                                    prompt_text = "\n\n**Generation Prompts:**\n"
-                                    
-                                    if isinstance(positive_prompt, str) and positive_prompt:
-                                        prompt_text += f"**Positive:**\n```\n{positive_prompt}\n```\n"
-                                    
-                                    if isinstance(negative_prompt, str) and negative_prompt:
-                                        prompt_text += f"**Negative:**\n```\n{negative_prompt}\n```\n"
-                                    
-                                    # Add to message content
-                                    message_content += prompt_text
-                                    print("Successfully added prompts to Discord message")
-                                else:
-                                    print("No valid prompts extracted from discord_image_node function")
-                                    # Raise an exception to trigger the fallback extraction method
-                                    raise ValueError("No valid prompts extracted")
-                            
-                            except Exception as e:
-                                print(f"Could not use discord_image_node extraction: {str(e)}")
-                                print("Falling back to built-in prompt extraction")
-                                
-                                # Local extraction logic
-                                positive_prompt = None
-                                negative_prompt = None
-                                
-                                # Find CLIP text nodes
-                                clip_nodes = []
-                                
-                                # Define node types that can contain prompts
-                                prompt_node_types = [
-                                    "CLIPTextEncode",      # Standard SD 1.5 prompt node
-                                    "SDXLPromptEncoder",   # SDXL prompt encoder 
-                                    "SDXLTextEncode",      # Another SDXL text node
-                                ]
-                                
-                                if "nodes" in workflow_data:
-                                    nodes = workflow_data["nodes"]
-                                    node_list = []
-                                    
-                                    # Debug print full node data for the first few nodes
-                                    print("\nExamining raw node data:")
-                                    if isinstance(nodes, dict):
-                                        for i, (node_id, node) in enumerate(list(nodes.items())[:3]):
-                                            print(f"Node {i} (ID: {node_id}): {node.get('type', 'unknown')} - Active status: bypassed={node.get('bypassed', 'Not set')}, muted={node.get('muted', 'Not set')}, disabled={node.get('disabled', 'Not set')}")
-                                    elif isinstance(nodes, list) and len(nodes) > 0:
-                                        for i, node in enumerate(nodes[:3]):
-                                            print(f"Node {i}: {node.get('type', 'unknown')} - Active status: bypassed={node.get('bypassed', 'Not set')}, muted={node.get('muted', 'Not set')}, disabled={node.get('disabled', 'Not set')}")
-                                    
-                                    # Convert to list for processing
-                                    if isinstance(nodes, dict):
-                                        print("Nodes is a dictionary, converting to list...")
-                                        for node_id, node in nodes.items():
-                                            if isinstance(node, dict):
-                                                # Store the ID in the node dict for reference
-                                                node_with_id = node.copy()  # Copy to avoid modifying original
-                                                node_with_id["id"] = node_id
-                                                node_list.append(node_with_id)
-                                    elif isinstance(nodes, list):
-                                        print("Nodes is already a list")
-                                        node_list = nodes
-                                    else:
-                                        print(f"Unexpected type for nodes: {type(nodes)}")
-                                    
-                                    print(f"Processed {len(node_list)} nodes from workflow data")
-                                    
-                                    # Let's specifically search for all CLIP text nodes to analyze
-                                    print("\nSearching for all possible prompt nodes (active or disabled):")
-                                    all_prompt_nodes = []
-                                    for node in node_list:
-                                        if isinstance(node, dict) and "type" in node:
-                                            node_type = node.get("type", "")
-                                            if node_type in prompt_node_types or ("Text" in node_type and ("Encode" in node_type or "Prompt" in node_type)):
-                                                # Found a potential prompt node
-                                                title = node.get("title", "Untitled")
-                                                is_active = not (node.get("bypassed", False) or node.get("muted", False) or 
-                                                                node.get("disabled", False) or node.get("active", True) == False or 
-                                                                node.get("enabled", True) == False)
-                                                
-                                                # Print detailed info
-                                                print(f"Prompt node found: {title} (Type: {node_type})")
-                                                print(f"  - Status: {'ACTIVE' if is_active else 'DISABLED'}")
-                                                print(f"  - Properties: bypassed={node.get('bypassed', 'Not set')}, muted={node.get('muted', 'Not set')}, disabled={node.get('disabled', 'Not set')}")
-                                                if "widgets_values" in node and node["widgets_values"]:
-                                                    text_preview = node["widgets_values"][0][:50] + "..." if len(node["widgets_values"][0]) > 50 else node["widgets_values"][0]
-                                                    print(f"  - Content preview: {text_preview}")
-                                                
-                                                all_prompt_nodes.append(node)
-                                    
-                                    print(f"Found {len(all_prompt_nodes)} total potential prompt nodes ({len([n for n in all_prompt_nodes if not (n.get('bypassed', False) or n.get('muted', False) or n.get('disabled', False) or n.get('active', True) == False or n.get('enabled', True) == False)])} active, {len([n for n in all_prompt_nodes if n.get('bypassed', False) or n.get('muted', False) or n.get('disabled', False) or n.get('active', True) == False or n.get('enabled', True) == False])} disabled)")
-                                    
-                                    # Check for active prompt nodes (not muted/bypassed)
-                                    for node in node_list:
-                                        if isinstance(node, dict) and "type" in node:
-                                            # Check for various ways a node might be disabled
-                                            is_disabled = (
-                                                node.get("bypassed", False) or 
-                                                node.get("muted", False) or 
-                                                node.get("disabled", False) or
-                                                node.get("active", True) == False or 
-                                                node.get("enabled", True) == False
-                                            )
-                                            
-                                            # If no clear status property, let's check outputs to see if they're connected
-                                            if not is_disabled and ("outputs" in node or "Output" in node):
-                                                # No outputs might mean disconnected
-                                                has_outputs = False
-                                                if "outputs" in node and node["outputs"]:
-                                                    has_outputs = True
-                                                elif "Output" in node and node["Output"]:
-                                                    has_outputs = True
-                                                
-                                                # Check if we should include nodes with no connections (sometimes these are valid sources)
-                                                # For prompt nodes, we'll consider them even if disconnected, but log it
-                                                if not has_outputs and node["type"] in prompt_node_types:
-                                                    print(f"Note: Including prompt node that appears disconnected: {node.get('title', node['type'])}")
-                                            
-                                            if is_disabled:
-                                                print(f"Skipping disabled node: {node.get('title', node.get('type', 'unknown'))}")
-                                                continue
-                                            
-                                            # If we reach here, the node is active
-                                            # Check standard prompt node types
-                                            if node["type"] in prompt_node_types:
-                                                if "widgets_values" in node and node["widgets_values"]:
-                                                    clip_nodes.append(node)
-                                                    print(f"Found active prompt node: {node.get('title', node['type'])}")
-                                            # Also look for other common prompt nodes
-                                            elif "Text" in node["type"] and ("Encode" in node["type"] or "Prompt" in node["type"]):
-                                                print(f"Found potential prompt node of type: {node['type']}")
-                                                if "widgets_values" in node and node["widgets_values"]:
-                                                    print(f"Values: {node['widgets_values']}")
-                                                    clip_nodes.append(node)
-                                
-                                print(f"Found {len(clip_nodes)} active prompt nodes")
-                                
-                                # Dump the first 5 nodes to debug
-                                print("Sampling first few nodes for debugging:")
-                                if isinstance(workflow_data["nodes"], dict):
-                                    sample_nodes = list(workflow_data["nodes"].values())[:5]
-                                    for i, node in enumerate(sample_nodes):
-                                        if isinstance(node, dict):
-                                            print(f"Node {i}: type={node.get('type', 'unknown')}, title={node.get('title', 'untitled')}")
-                                elif isinstance(workflow_data["nodes"], list):
-                                    for i, node in enumerate(workflow_data["nodes"][:5]):
-                                        if isinstance(node, dict):
-                                            print(f"Node {i}: type={node.get('type', 'unknown')}, title={node.get('title', 'untitled')}")
-                                
-                                # Process CLIP nodes
-                                if len(clip_nodes) == 2:
-                                    # Identify which is positive/negative
-                                    indicators = ["worst quality", "low quality", "bad quality", "nude", "nsfw"]
-                                    scores = [0, 0]
-                                    
-                                    for i, node in enumerate(clip_nodes):
-                                        text = node["widgets_values"][0].lower()
-                                        for indicator in indicators:
-                                            if indicator in text:
-                                                scores[i] += 1
-                                    
-                                    # The one with more negative indicators is the negative prompt
-                                    if scores[0] > scores[1]:
-                                        negative_prompt = clip_nodes[0]["widgets_values"][0]
-                                        positive_prompt = clip_nodes[1]["widgets_values"][0]
-                                    else:
-                                        negative_prompt = clip_nodes[1]["widgets_values"][0]
-                                        positive_prompt = clip_nodes[0]["widgets_values"][0]
-                                    
-                                    print(f"Identified prompts with scores: {scores}")
-                                    
-                                    # Add to message
-                                    prompt_text = "\n\n**Generation Prompts:**\n"
-                                    prompt_text += f"**Positive:**\n```\n{positive_prompt}\n```\n"
-                                    prompt_text += f"**Negative:**\n```\n{negative_prompt}\n```\n"
-                                    
-                                    # Add to message content
-                                    message_content += prompt_text
-                                    print("Added prompts to Discord message via built-in extraction")
-                                elif len(clip_nodes) == 1:
-                                    # Just one prompt, assume it's positive
-                                    positive_prompt = clip_nodes[0]["widgets_values"][0]
-                                    
-                                    # Add to message
-                                    prompt_text = "\n\n**Generation Prompts:**\n"
-                                    prompt_text += f"**Positive:**\n```\n{positive_prompt}\n```\n"
-                                    
-                                    # Add to message content
-                                    message_content += prompt_text
-                                    print("Added single prompt to Discord message")
-                                else:
-                                    # Handle multiple CLIP nodes (more than 2)
-                                    print(f"Found {len(clip_nodes)} CLIP nodes, will analyze each to determine positive/negative")
-                                    
-                                    # Collect potential positive and negative prompts
-                                    positive_candidates = []
-                                    negative_candidates = []
-                                    
-                                    # Common negative prompt indicators
-                                    negative_indicators = ["worst quality", "low quality", "bad quality", "nude", "nsfw", 
-                                                         "negative", "bad", "worse", "poor", "deformed"]
-                                    
-                                    for node in clip_nodes:
-                                        # Get the node's text content
-                                        if "widgets_values" in node and node["widgets_values"]:
-                                            text = node["widgets_values"][0]
-                                            title = node.get("title", "").lower()
-                                            node_type = node.get("type", "").lower()
-                                            
-                                            # Check if title explicitly indicates a negative prompt
-                                            is_negative = False
-                                            if "negative" in title:
-                                                is_negative = True
-                                                print(f"Found explicit negative prompt node by title: {title}")
-                                            else:
-                                                # Check content for negative indicators
-                                                text_lower = text.lower()
-                                                negative_score = 0
-                                                for indicator in negative_indicators:
-                                                    if indicator in text_lower:
-                                                        negative_score += 1
-                                                
-                                                if negative_score >= 2:  # Threshold for considering as negative
-                                                    is_negative = True
-                                                    print(f"Identified negative prompt by content with score {negative_score}")
-                                            
-                                            # Categorize the prompt
-                                            if is_negative:
-                                                negative_candidates.append(text)
-                                            else:
-                                                positive_candidates.append(text)
-                                    
-                                    # Get the final prompts
-                                    positive_prompt = None
-                                    negative_prompt = None
-                                    
-                                    if positive_candidates:
-                                        # Use the longest positive prompt as it likely has more information
-                                        positive_prompt = max(positive_candidates, key=len)
-                                        print(f"Selected positive prompt ({len(positive_prompt)} chars)")
-                                    
-                                    if negative_candidates:
-                                        # Use the longest negative prompt
-                                        negative_prompt = max(negative_candidates, key=len)
-                                        print(f"Selected negative prompt ({len(negative_prompt)} chars)")
-                                    
-                                    # Add to message if any prompts were found
-                                    if positive_prompt or negative_prompt:
-                                        prompt_text = "\n\n**Generation Prompts:**\n"
-                                        
-                                        if positive_prompt:
-                                            prompt_text += f"**Positive:**\n```\n{positive_prompt}\n```\n"
-                                        
-                                        if negative_prompt:
-                                            prompt_text += f"**Negative:**\n```\n{negative_prompt}\n```\n"
-                                        
-                                        # Add to message content
-                                        message_content += prompt_text
-                                        print(f"Added prompts to Discord message from {len(positive_candidates)} positive and {len(negative_candidates)} negative candidates")
-                                    else:
-                                        print("Could not identify any positive or negative prompts from the CLIP nodes")
-                        except Exception as e:
-                            print(f"Error extracting prompts: {str(e)}")
-                            print(f"Error type: {type(e).__name__}")
-                            import traceback
-                            traceback.print_exc()
+                        positive_prompt, negative_prompt = extract_prompts_from_workflow(workflow_data)
+                        prompt_section = build_prompt_section(positive_prompt, negative_prompt)
+                        if prompt_section:
+                            message_content += prompt_section
+                            print("Successfully added prompts to Discord message")
                     else:
                         print("No workflow data found for prompt extraction")
                 
@@ -1426,20 +981,10 @@ class DiscordSendSaveVideo:
                     discord_sent_files.append(discord_filename)  # Store the Discord UUID filename instead of local path
                     print(f"Successfully sent video to Discord with filename: {discord_filename}")
                     
-                    # Try to extract CDN URL if available
-                    if save_cdn_urls and response.status_code == 200:
-                        try:
-                            response_data = response.json()
-                            # Discord webhook responses include attachments with URLs
-                            if "attachments" in response_data and isinstance(response_data["attachments"], list):
-                                for attachment in response_data["attachments"]:
-                                    if "url" in attachment and "filename" in attachment:
-                                        # Filter out workflow JSON files
-                                        if not attachment["filename"].endswith(".json"):
-                                            discord_cdn_urls.append((attachment["filename"], attachment["url"]))
-                                            print(f"Extracted CDN URL for video: {attachment['url']}")
-                        except Exception as e:
-                            print(f"Error extracting CDN URL from response: {e}")
+                    # Extract CDN URLs using shared utility
+                    if save_cdn_urls:
+                        new_urls = extract_cdn_urls_from_response(response)
+                        discord_cdn_urls.extend(new_urls)
                 else:
                     print(f"Discord API error: {response.status_code} - {response.text}")
                     discord_send_success = False
@@ -1457,34 +1002,14 @@ class DiscordSendSaveVideo:
                     except Exception as e:
                         print(f"Error cleaning up temporary file: {e}")
 
-            # If we have CDN URLs and the option is enabled, send them as a text file
+            # Send CDN URLs file using shared utility
             if save_cdn_urls and discord_cdn_urls:
-                try:
-                    # Create the text file content
-                    url_text_content = "# Discord CDN URLs\n\n"
-                    for idx, (filename, url) in enumerate(discord_cdn_urls):
-                        url_text_content += f"{idx+1}. {filename}: {url}\n"
-                    
-                    # Create a unique filename for the text file
-                    urls_filename = f"cdn_urls-{uuid4()}.txt"
-                    
-                    # Prepare the request with just the URL file
-                    url_files = {"file": (urls_filename, url_text_content.encode('utf-8'))}
-                    url_data = {"content": "Discord CDN URLs for the uploaded videos:"}
-                    
-                    # Send a follow-up message with just the URLs text file
-                    url_response = send_to_discord_with_retry(
-                        webhook_url,
-                        files=url_files,
-                        data=url_data
-                    )
-                    
-                    if url_response.status_code in [200, 204]:
-                        print(f"Successfully sent CDN URLs text file to Discord")
-                    else:
-                        print(f"Error sending CDN URLs text file: Status code {url_response.status_code}")
-                except Exception as e:
-                    print(f"Error creating or sending CDN URLs text file: {e}")
+                send_cdn_urls_file(
+                    webhook_url=webhook_url,
+                    urls=discord_cdn_urls,
+                    send_func=send_to_discord_with_retry,
+                    message="Discord CDN URLs for the uploaded videos:"
+                )
         
         # Update GitHub repository with CDN URLs if enabled
         if github_cdn_update and send_to_discord and discord_cdn_urls:

@@ -8,6 +8,22 @@ import logging
 import sys
 
 
+def setup_logging(level: int = logging.INFO) -> None:
+    """
+    Set up logging configuration for the application.
+
+    Args:
+        level: The logging level to use (default: INFO)
+    """
+    logging.basicConfig(
+        level=level,
+        format='[%(name)s] %(levelname)s: %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+
 def get_logger(name: str = "comfyui_discordsend") -> logging.Logger:
     """
     Get a configured logger for the extension.

@@ -20,7 +20,7 @@ sys.modules["server"] = MagicMock()
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from discord_video_node import validate_video_for_discord
+from nodes.video_node import validate_video_for_discord
 
 class TestPathLogic(unittest.TestCase):
     """Tests for path and file validation logic."""
