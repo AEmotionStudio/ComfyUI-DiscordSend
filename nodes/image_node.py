@@ -672,7 +672,8 @@ class DiscordSendSaveImage:
                                         print(f"Successfully sent workflow JSON for image {batch_number+1}")
                                     
                                     # Extract CDN URLs and send file using shared utility
-                                    if save_cdn_urls:
+                                    # Only extract when status is 200 (has content), not 204 (no content)
+                                    if save_cdn_urls and response.status_code == 200:
                                         new_urls = extract_cdn_urls_from_response(response)
                                         batch_cdn_urls.extend(new_urls)
                                         if batch_cdn_urls:
@@ -761,7 +762,8 @@ class DiscordSendSaveImage:
                     discord_sent_files = ["batch_gallery"]  # Mark as successfully sent
 
                     # Extract CDN URLs and send file using shared utility
-                    if save_cdn_urls:
+                    # Only extract when status is 200 (has content), not 204 (no content)
+                    if save_cdn_urls and response.status_code == 200:
                         new_urls = extract_cdn_urls_from_response(response)
                         batch_cdn_urls.extend(new_urls)
                         if batch_cdn_urls:
