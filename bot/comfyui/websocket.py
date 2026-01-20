@@ -38,31 +38,48 @@ class ComfyUIWebSocket:
         self._reconnect_attempts = 0
         self._should_reconnect = True
         self._reconnect_task: Optional[asyncio.Task] = None
+        
+        # Lock to prevent race conditions between connect() and disconnect()
+        self._state_lock = asyncio.Lock()
 
     async def connect(self):
         """Connect to the WebSocket."""
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
+        async with self._state_lock:
+            # Check if disconnect was called - don't proceed if so
+            if not self._should_reconnect:
+                logger.info("Connect aborted: disconnect was requested")
+                return
+                
+            if self.session is None or self.session.closed:
+                self.session = aiohttp.ClientSession()
 
-        try:
-            self.ws = await self.session.ws_connect(self.ws_url)
-            self._running = True
-            self._should_reconnect = True
-            self._reconnect_attempts = 0  # Reset on successful connection
-            self._listen_task = asyncio.create_task(self._listen())
-            logger.info(f"Connected to ComfyUI WebSocket at {self.ws_url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to WebSocket: {e}")
-            if self.session and not self.session.closed:
-                await self.session.close()
-            raise
+            try:
+                self.ws = await self.session.ws_connect(self.ws_url)
+                # Re-check after await in case disconnect() was called during connection
+                if not self._should_reconnect:
+                    logger.info("Connect aborted after ws_connect: disconnect was requested")
+                    if self.ws and not self.ws.closed:
+                        await self.ws.close()
+                    if self.session and not self.session.closed:
+                        await self.session.close()
+                    return
+                self._running = True
+                self._reconnect_attempts = 0  # Reset on successful connection
+                self._listen_task = asyncio.create_task(self._listen())
+                logger.info(f"Connected to ComfyUI WebSocket at {self.ws_url}")
+            except Exception as e:
+                logger.error(f"Failed to connect to WebSocket: {e}")
+                if self.session and not self.session.closed:
+                    await self.session.close()
+                raise
 
     async def disconnect(self):
         """Disconnect from WebSocket."""
-        self._should_reconnect = False  # Prevent reconnection loop
-        self._running = False
+        async with self._state_lock:
+            self._should_reconnect = False  # Prevent reconnection loop
+            self._running = False
 
-        # Cancel reconnection task if running
+        # Cancel reconnection task if running (outside lock to avoid deadlock)
         if self._reconnect_task and not self._reconnect_task.done():
             self._reconnect_task.cancel()
             try:
