@@ -196,11 +196,13 @@ class JobManager:
         prompt_id = msg.get("prompt_id")
         exception_type = msg.get("exception_type", "Unknown Error")
         exception_message = msg.get("exception_message", "")
-        
+
         if prompt_id:
             error_msg = f"{exception_type}: {exception_message}"
-            job = await self.repo.update_job_status(prompt_id, JobStatus.FAILED.value, error_message=error_msg)
-            # Notify user of failure via delivery service? 
-            # Ideally yes, but DeliveryService currently only sends images.
-            # We might want to expand DeliveryService to handle errors too, or reuse the channel_id to post the failure embed.
-            pass
+            job = await self.repo.update_job_status(
+                prompt_id, JobStatus.FAILED.value, error_message=error_msg
+            )
+
+            # Deliver error notification to user
+            if job:
+                await self.delivery.deliver_error(job, error_msg)

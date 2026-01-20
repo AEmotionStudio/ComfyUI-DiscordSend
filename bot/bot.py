@@ -5,7 +5,7 @@ import sys
 import asyncio
 from pathlib import Path
 
-from .config import Config
+from .config import BotConfig
 from .database.repository import Repository
 from .comfyui.client import ComfyUIClient
 from .comfyui.websocket import ComfyUIWebSocket
@@ -17,7 +17,7 @@ class ComfyUIBot(commands.Bot):
     Main Bot Class for ComfyUI Companion.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: BotConfig):
         intents = discord.Intents.default()
         intents.message_content = True  # Needed for some commands if not pure slash
         intents.members = True # Useful for permission checks
@@ -92,8 +92,8 @@ class ComfyUIBot(commands.Bot):
         extensions = [
             "bot.cogs.generate",
             "bot.cogs.queue",
-            # "bot.cogs.templates",
-            # "bot.cogs.history",
+            "bot.cogs.templates",
+            "bot.cogs.history",
             "bot.cogs.admin",
         ]
         
