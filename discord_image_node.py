@@ -44,7 +44,7 @@ class DiscordSendSaveImage:
         return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "The images to save and/or send to Discord."}),
-                "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder."}),
+                "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder for batch indexing."}),
                 "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last image instead of creating incrementing filenames."})
             },
             "optional": {
@@ -132,12 +132,12 @@ class DiscordSendSaveImage:
                 "github_repo": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo)."
+                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo, e.g. 'AEmotionStudio/ComfyUI-DiscordSend')."
                 }),
                 "github_token": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub personal access token (PAT) with 'repo' scope. Keep this private!"
+                    "tooltip": "GitHub personal access token with 'repo' permissions (Settings -> Developer settings -> Personal access tokens). Keep this private!"
                 }),
                 "github_file_path": ("STRING", {
                     "default": "cdn_urls.md",
@@ -431,21 +431,12 @@ class DiscordSendSaveImage:
         if not args.disable_metadata:
             metadata = PngInfo()
             if prompt is not None:
-                # Prompt is already sanitized at start of function, but we double-check
-                # Note: sanitize_json_for_export is relatively expensive (recursion + regex)
-                # so doing this once per batch instead of per image is a big win
-                sanitized_prompt = sanitize_json_for_export(prompt)
-                metadata.add_text("prompt", json.dumps(sanitized_prompt))
+                # Prompt is already sanitized at start of function
+                metadata.add_text("prompt", json.dumps(prompt))
             if extra_pnginfo is not None:
                 # extra_pnginfo is already sanitized at start of function
-                sanitized_extra_pnginfo = sanitize_json_for_export(extra_pnginfo)
-                for x in sanitized_extra_pnginfo:
-                    if x == "workflow":
-                        # Extra sanitization for workflow data
-                        workflow_data = sanitize_json_for_export(sanitized_extra_pnginfo[x])
-                        metadata.add_text(x, json.dumps(workflow_data))
-                    else:
-                        metadata.add_text(x, json.dumps(sanitized_extra_pnginfo[x]))
+                for x in extra_pnginfo:
+                    metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
         for batch_number, image in enumerate(images):
             # Convert the tensor to a PIL image

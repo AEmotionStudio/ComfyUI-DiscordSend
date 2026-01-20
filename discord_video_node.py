@@ -47,23 +47,16 @@ def cached(max_size=None):
         return decorator(func)
     return decorator
 
-# Try to import dependencies from nodes.py
-try:
-    from discordsend_utils import ffmpeg_path, get_audio, hash_path, validate_path, requeue_workflow, \
-            gifski_path, calculate_file_hash, strip_path, try_download_video, is_url, \
-            imageOrLatent, BIGMAX, merge_filter_args, ENCODE_ARGS, floatOrInt
-    from comfy.utils import ProgressBar
-    has_vhs_formats = False  # Set to False since we're not using VHS formats anymore
-except ImportError:
-    print("Warning: Some dependencies from Video Helper Suite might be missing")
-    # Define minimal versions of required functions/classes
-    ffmpeg_path = None
-    ENCODE_ARGS = ("utf-8", "ignore")
-    floatOrInt = ("FLOAT", "INT")
-    imageOrLatent = ("IMAGE", "LATENT")
-    BIGMAX = 1000000
-    has_vhs_formats = False
+# Constants and configurations
+ffmpeg_path = None
+ENCODE_ARGS = ("utf-8", "ignore")
+has_vhs_formats = False
 
+# Try to import ComfyUI dependencies
+try:
+    from comfy.utils import ProgressBar
+except ImportError:
+    # Define minimal version of ProgressBar if not running in ComfyUI
     class ProgressBar:
         def __init__(self, total):
             self.total = total
@@ -255,7 +248,7 @@ class DiscordSendSaveVideo:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Secure Discord webhook URL (from Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
+                    "tooltip": "Secure Discord webhook URL (found in Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
@@ -285,12 +278,12 @@ class DiscordSendSaveVideo:
                 "github_repo": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo)."
+                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo, e.g. 'AEmotionStudio/ComfyUI-DiscordSend')."
                 }),
                 "github_token": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub personal access token (PAT) with 'repo' scope. Keep this private!"
+                    "tooltip": "GitHub personal access token with 'repo' permissions (Settings -> Developer settings -> Personal access tokens). Keep this private!"
                 }),
                 "github_file_path": ("STRING", {
                     "default": "cdn_urls.md", 
@@ -876,14 +869,13 @@ class DiscordSendSaveVideo:
         
         # Send to Discord if requested
         if send_to_discord and webhook_url:
+            discord_optimized_file = None
             try:
                 # For Discord compatibility, create a special Discord-optimized copy of the video
                 # This is particularly important when add_time is disabled
-                discord_optimized_file = None
+                input_file = output_files[-1]  # Get input file (the last output file)
+
                 try:
-                    # Get input file (the last output file)
-                    input_file = output_files[-1]
-                    
                     # Create optimized output file in a temp location
                     temp_dir = folder_paths.get_temp_directory()
                     discord_optimized_file = os.path.join(temp_dir, f"discord_optimized_{uuid4()}{os.path.splitext(input_file)[1]}")
@@ -939,13 +931,14 @@ class DiscordSendSaveVideo:
                         print(f"Discord-optimized file created: {discord_optimized_file}")
                     else:
                         # If no optimization needed, just use the original file
-                        discord_optimized_file = input_file
-                        print(f"Using original file for Discord: {discord_optimized_file}")
+                        # Set to None to indicate we're using the original file so we don't clean it up
+                        discord_optimized_file = None
+                        print(f"Using original file for Discord: {input_file}")
                         
                 except Exception as e:
                     print(f"Warning: Failed to create Discord-optimized file: {str(e)}")
                     print("Falling back to original file")
-                    discord_optimized_file = output_files[-1]
+                    discord_optimized_file = None # Using original file
                 
                 # Prepare Discord files and message
                 discord_files = []
@@ -1366,7 +1359,8 @@ class DiscordSendSaveVideo:
                 files = []
                 
                 # Use our optimized file for Discord instead of the original
-                file_path = discord_optimized_file
+                # If discord_optimized_file is None, it means we use the original file
+                file_path = discord_optimized_file if discord_optimized_file else input_file
                 
                 try:
                     # Validate the video file before sending to Discord
@@ -1451,7 +1445,16 @@ class DiscordSendSaveVideo:
             except Exception as e:
                 print(f"Error sending to Discord: {str(e)}")
                 discord_send_success = False
-                
+
+            finally:
+                # Security: Ensure temporary optimized file is deleted to prevent disk filling
+                if discord_optimized_file and os.path.exists(discord_optimized_file):
+                    try:
+                        os.remove(discord_optimized_file)
+                        print(f"Cleaned up temporary file: {discord_optimized_file}")
+                    except Exception as e:
+                        print(f"Error cleaning up temporary file: {e}")
+
             # If we have CDN URLs and the option is enabled, send them as a text file
             if save_cdn_urls and discord_cdn_urls:
                 try:
