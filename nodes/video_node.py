@@ -37,6 +37,12 @@ from shared import (
     send_cdn_urls_file,
     extract_prompts_from_workflow
 )
+from shared.media import (
+    validate_video_for_discord,
+    normalize_video_extension,
+    optimize_video_for_discord as shared_optimize_video,
+    detect_ffmpeg
+)
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -59,13 +65,15 @@ def cached(max_size=None):
         return decorator(func)
     return decorator
 
-# Define constants and variables previously imported from discordsend_utils
-ffmpeg_path = None
+# Define constants
 ENCODE_ARGS = ("utf-8", "ignore")
 floatOrInt = ("FLOAT", "INT")
 imageOrLatent = ("IMAGE", "LATENT")
 BIGMAX = 1000000
 has_vhs_formats = False
+
+# Detect ffmpeg using shared utility
+ffmpeg_path = detect_ffmpeg()
 
 # Try to import ProgressBar from comfy.utils
 try:
@@ -75,67 +83,10 @@ except ImportError:
         def __init__(self, total):
             self.total = total
             self.current = 0
-        
+
         def update(self, advance=1):
             self.current += advance
             print(f"Progress: {self.current}/{self.total}", end="\r")
-
-# Fallback if ffmpeg_path is None, try to detect it
-if ffmpeg_path is None:
-    # Try direct detection methods for ffmpeg
-    try:
-        # Try imageio-ffmpeg first (common in Python environments)
-        try:
-            import imageio_ffmpeg
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-            print(f"Found ffmpeg via imageio_ffmpeg: {ffmpeg_path}")
-        except (ImportError, Exception):
-            # Fall back to checking the system path
-            from shutil import which
-            ffmpeg_path = which("ffmpeg")
-            if ffmpeg_path:
-                print(f"Found ffmpeg in system path: {ffmpeg_path}")
-    except Exception as e:
-        print(f"Error during ffmpeg detection: {str(e)}")
-
-# Function to validate video files for Discord compatibility
-def validate_video_for_discord(file_path):
-    """
-    Validate that a video file is compatible with Discord.
-    Returns a tuple of (is_valid, message)
-    """
-    if not os.path.exists(file_path):
-        return False, f"File does not exist: {file_path}"
-    
-    # Check if file is empty or too small
-    file_size = os.path.getsize(file_path)
-    if file_size == 0:
-        return False, "File is empty"
-    if file_size < 1024:  # Less than 1KB
-        return False, f"File is suspiciously small: {file_size} bytes"
-    
-    # Check if file is too large for Discord (Discord limit is 25MB for regular users, 50MB for Nitro)
-    max_size = 25 * 1024 * 1024  # 25MB in bytes
-    if file_size > max_size:
-        return False, f"File exceeds Discord's size limit: {file_size} bytes (max {max_size} bytes)"
-    
-    # Get file extension
-    ext = os.path.splitext(file_path)[1].lower().lstrip('.')
-    
-    # Return validation result based on file type
-    if ext in ['mp4', 'webm', 'gif']:
-        # These formats are well supported by Discord
-        return True, "Valid video format for Discord"
-    elif ext in ['mov']:
-        # MOV files (ProRes) may need conversion for Discord
-        return False, "MOV files may need conversion for Discord compatibility"
-    elif ext in ['png']:
-        # PNG sequences are not directly supported by Discord
-        return False, "PNG sequences are not directly supported by Discord and require compilation into a video format"
-    else:
-        # For any other extension, warn but allow sending
-        return False, f"Unknown format {ext}, may not be compatible with Discord"
-
 class DiscordSendSaveVideo:
     """
     A ComfyUI node that can send videos to Discord and save them with advanced options.
@@ -857,73 +808,13 @@ class DiscordSendSaveVideo:
             discord_optimized_file = None
             try:
                 # For Discord compatibility, create a special Discord-optimized copy of the video
-                # This is particularly important when add_time is disabled
                 input_file = output_files[-1]  # Get input file (the last output file)
+                temp_dir = folder_paths.get_temp_directory()
 
-                try:
-                    # Create optimized output file in a temp location
-                    temp_dir = folder_paths.get_temp_directory()
-                    discord_optimized_file = os.path.join(temp_dir, f"discord_optimized_{uuid4()}{os.path.splitext(input_file)[1]}")
-                    
-                    # Set up ffmpeg arguments for optimized Discord conversion
-                    # This creates a new file specifically optimized for Discord playback
-                    format_ext = os.path.splitext(input_file)[1].lstrip('.').lower()
-                    optimize_args = []
-                    
-                    if format_ext == "mp4":
-                        # MP4 optimization for Discord
-                        optimize_args = [
-                            ffmpeg_path, "-i", input_file,
-                            "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                            "-movflags", "faststart", "-preset", "fast",
-                            "-profile:v", "baseline", "-level", "3.0",
-                            "-crf", "23"
-                        ]
-                        
-                        # Add audio if present in original file
-                        optimize_args.extend(["-c:a", "aac", "-b:a", "128k"])
-                        
-                        # Add output file
-                        optimize_args.append(discord_optimized_file)
-                    elif format_ext == "webm":
-                        # WebM optimization for Discord
-                        optimize_args = [
-                            ffmpeg_path, "-i", input_file,
-                            "-c:v", "libvpx-vp9", 
-                            "-pix_fmt", "yuv420p",
-                            "-crf", "30", "-b:v", "0",
-                            "-deadline", "good"
-                        ]
-                        
-                        # Add audio if present in original file
-                        optimize_args.extend(["-c:a", "libopus", "-b:a", "96k"])
-                        
-                        # Add output file
-                        optimize_args.append(discord_optimized_file)
-                    elif format_ext == "gif":
-                        # GIF optimization for Discord
-                        optimize_args = [
-                            ffmpeg_path, "-i", input_file,
-                            "-vf", "fps=15,scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                        ]
-                        
-                        # Add output file
-                        optimize_args.append(discord_optimized_file)
-                    
-                    if optimize_args:
-                        print(f"Creating Discord-optimized version of {format_ext.upper()} file...")
-                        subprocess.run(optimize_args, check=True, capture_output=True)
-                        print(f"Discord-optimized file created: {discord_optimized_file}")
-                    else:
-                        # If no optimization needed, just use the original file
-                        # Set to None to indicate we're using the original file so we don't clean it up
-                        discord_optimized_file = None
-                        print(f"Using original file for Discord: {input_file}")
-                        
-                except Exception as e:
-                    print(f"Warning: Failed to create Discord-optimized file: {str(e)}")
-                    print("Falling back to original file")
-                    discord_optimized_file = None # Using original file
+                # Use shared utility for Discord optimization
+                discord_optimized_file = shared_optimize_video(input_file, ffmpeg_path, temp_dir)
+                if discord_optimized_file is None:
+                    print(f"Using original file for Discord: {input_file}")
                 
                 # Prepare Discord files and message
                 discord_files = []
