@@ -55,7 +55,7 @@ def build_metadata_section(
         return ""
 
     section = f"\n\n**{section_title}:**\n"
-    section += "\n".join(metadata_lines)
+    section += "\n".join(metadata_lines) + "\n"
     return section
 
 
