@@ -182,10 +182,11 @@ class ComfyUIWebSocket:
                 return
 
             try:
+                attempts_made = self._reconnect_attempts
                 await self.connect()
                 logger.info(
                     f"Successfully reconnected after "
-                    f"{self._reconnect_attempts} attempt(s)."
+                    f"{attempts_made} attempt(s)."
                 )
                 return
             except Exception as e:
