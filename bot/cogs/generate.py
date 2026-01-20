@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..embeds.builders import EmbedBuilder
 from ..services.permissions import require_permission, Permissions
-from ...discordsend_utils.workflow_builder import WorkflowBuilder
+from ...shared.workflow import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
 

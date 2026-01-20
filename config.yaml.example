@@ -1,0 +1,48 @@
+# ComfyUI-DiscordSend Bot Configuration
+# Copy this file to bot/config.yaml and fill in your values
+# Environment variables will override these settings (see .env.example)
+
+discord:
+  # Your Discord bot token (required)
+  # Get one at: https://discord.com/developers/applications
+  token: "YOUR_BOT_TOKEN_HERE"
+
+  # Your Discord application ID (optional)
+  # Used for slash command registration
+  application_id: "YOUR_APP_ID_HERE"
+
+comfyui:
+  # ComfyUI server URL (default: http://127.0.0.1:8188)
+  url: "http://127.0.0.1:8188"
+
+  # WebSocket URL for real-time updates (auto-derived from url if not set)
+  # ws_url: "ws://127.0.0.1:8188/ws"
+
+  # Request timeout in seconds
+  timeout: 30
+
+defaults:
+  # Maximum pending jobs per user per server
+  max_queue_per_user: 3
+
+  # How often to update progress embeds (seconds)
+  progress_update_interval: 2.0
+
+  # Default generation parameters
+  default_steps: 20
+  default_cfg: 7.0
+  default_width: 512
+  default_height: 512
+
+  # Path to default workflow (relative to bot/data/)
+  # workflow_path: "default_workflow_api.json"
+
+database:
+  # Database URL (default: SQLite in bot/data/bot.db)
+  # For PostgreSQL: postgresql+asyncpg://user:pass@localhost/dbname
+  # url: "sqlite+aiosqlite:///bot/data/bot.db"
+
+security:
+  # Restrict bot to specific guild IDs (empty = all guilds allowed)
+  allowed_guilds: []
+  # Example: allowed_guilds: [123456789, 987654321]

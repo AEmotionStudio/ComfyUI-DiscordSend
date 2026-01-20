@@ -13,7 +13,7 @@ sys.modules["comfy"] = MagicMock()
 sys.modules["comfy.cli_args"] = MagicMock()
 
 # Now we can safely import
-from discordsend_utils.github_integration import validate_github_repo, validate_file_path, update_github_cdn_urls
+from shared.github_integration import validate_github_repo, validate_file_path, update_github_cdn_urls
 
 class TestGitHubValidation(unittest.TestCase):
 

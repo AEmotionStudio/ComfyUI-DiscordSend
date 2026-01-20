@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import logging
 
-from ..services.permissions import require_permission, Permissions, PermissionLevel
+from ..services.permissions import require_permission, Permissions
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class AdminCog(commands.Cog):
         status_emoji = "✅" if comfy_status else "❌"
         
         embed = discord.Embed(title="Bot Status", color=discord.Color.dark_grey())
-        embed.add_field(name="ComfyUI Connection", value=f"{status_emoji} {self.bot.config.comfyui_url}", inline=False)
+        embed.add_field(name="ComfyUI Connection", value=f"{status_emoji} {self.bot.config.comfyui.url}", inline=False)
         embed.add_field(name="Guilds", value=str(len(self.bot.guilds)), inline=True)
         embed.add_field(name="Latency", value=f"{round(self.bot.latency * 1000)}ms", inline=True)
         

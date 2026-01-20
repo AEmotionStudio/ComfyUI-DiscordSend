@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from discordsend_utils.discord_api import send_to_discord_with_retry
+from shared.discord import send_to_discord_with_retry
 
 class TestDiscordAPI(unittest.TestCase):
     """Tests for the Discord API utility with mocked network responses."""
