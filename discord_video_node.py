@@ -255,7 +255,7 @@ class DiscordSendSaveVideo:
                 "webhook_url": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "Secure Discord webhook URL (from Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
+                    "tooltip": "Secure Discord webhook URL (found in Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
                 }),
                 "discord_message": ("STRING", {
                     "default": "", 
@@ -285,12 +285,12 @@ class DiscordSendSaveVideo:
                 "github_repo": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo)."
+                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo, e.g. 'AEmotionStudio/ComfyUI-DiscordSend')."
                 }),
                 "github_token": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub personal access token (PAT) with 'repo' scope. Keep this private!"
+                    "tooltip": "GitHub personal access token with 'repo' permissions (Settings -> Developer settings -> Personal access tokens). Keep this private!"
                 }),
                 "github_file_path": ("STRING", {
                     "default": "cdn_urls.md", 

@@ -44,7 +44,7 @@ class DiscordSendSaveImage:
         return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "The images to save and/or send to Discord."}),
-                "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder."}),
+                "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder for batch indexing."}),
                 "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last image instead of creating incrementing filenames."})
             },
             "optional": {
@@ -132,12 +132,12 @@ class DiscordSendSaveImage:
                 "github_repo": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo)."
+                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo, e.g. 'AEmotionStudio/ComfyUI-DiscordSend')."
                 }),
                 "github_token": ("STRING", {
                     "default": "", 
                     "multiline": False,
-                    "tooltip": "GitHub personal access token (PAT) with 'repo' scope. Keep this private!"
+                    "tooltip": "GitHub personal access token with 'repo' permissions (Settings -> Developer settings -> Personal access tokens). Keep this private!"
                 }),
                 "github_file_path": ("STRING", {
                     "default": "cdn_urls.md",
