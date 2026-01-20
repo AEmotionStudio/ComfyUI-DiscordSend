@@ -10,7 +10,7 @@ sys.path.append(str(project_root))
 
 from bot.config import BotConfig
 from bot.bot import ComfyUIBot
-from discordsend_utils.logging_config import setup_logging
+from shared.logging_config import setup_logging
 
 def main():
     # Setup logging

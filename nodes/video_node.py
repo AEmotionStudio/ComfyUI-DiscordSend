@@ -24,7 +24,7 @@ import functools
 import server
 
 # Import shared utilities
-from discordsend_utils import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry, tensor_to_numpy_uint8
+from shared import sanitize_json_for_export, update_github_cdn_urls, send_to_discord_with_retry, tensor_to_numpy_uint8
 # Define cached decorator for local use
 def cached(max_size=None):
     """
@@ -47,16 +47,18 @@ def cached(max_size=None):
         return decorator(func)
     return decorator
 
-# Constants and configurations
+# Define constants and variables previously imported from discordsend_utils
 ffmpeg_path = None
 ENCODE_ARGS = ("utf-8", "ignore")
+floatOrInt = ("FLOAT", "INT")
+imageOrLatent = ("IMAGE", "LATENT")
+BIGMAX = 1000000
 has_vhs_formats = False
 
-# Try to import ComfyUI dependencies
+# Try to import ProgressBar from comfy.utils
 try:
     from comfy.utils import ProgressBar
 except ImportError:
-    # Define minimal version of ProgressBar if not running in ComfyUI
     class ProgressBar:
         def __init__(self, total):
             self.total = total

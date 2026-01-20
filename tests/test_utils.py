@@ -20,9 +20,9 @@ sys.modules["cv2"] = MagicMock()
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from discordsend_utils.sanitizer import sanitize_json_for_export
-from discordsend_utils.discord_api import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry, DiscordWebhookClient
-from discordsend_utils.github_integration import update_github_cdn_urls
+from shared.workflow.sanitizer import sanitize_json_for_export
+from shared.discord.webhook_client import validate_webhook_url, sanitize_webhook_for_logging, send_to_discord_with_retry, DiscordWebhookClient
+from shared.github_integration import update_github_cdn_urls
 
 
 class TestSanitizer(unittest.TestCase):
@@ -176,7 +176,7 @@ class TestSSRFPrevention(unittest.TestCase):
 
         self.assertIn("Invalid webhook URL", str(cm.exception))
 
-    @patch('discordsend_utils.discord_api.requests.post')
+    @patch('shared.discord.webhook_client.requests.post')
     def test_send_to_discord_allows_valid_url(self, mock_post):
         """Should allow valid Discord URLs."""
         valid_url = "https://discord.com/api/webhooks/123/abc"
@@ -210,7 +210,7 @@ class TestWebhookSanitization(unittest.TestCase):
 class TestDiscordWebhookClient(unittest.TestCase):
     """Tests for DiscordWebhookClient security features."""
 
-    @patch('discordsend_utils.discord_api.requests.post')
+    @patch('shared.discord.webhook_client.requests.post')
     def test_exception_token_leakage(self, mock_post):
         """Should redact tokens from exception messages in last_error."""
         token = "SUPER_SECRET_TOKEN"
@@ -232,8 +232,8 @@ class TestDiscordWebhookClient(unittest.TestCase):
 class TestGitHubIntegration(unittest.TestCase):
     """Tests for GitHub integration security features."""
 
-    @patch('discordsend_utils.github_integration.requests.put')
-    @patch('discordsend_utils.github_integration.requests.get')
+    @patch('shared.github_integration.requests.put')
+    @patch('shared.github_integration.requests.get')
     def test_github_token_redaction_in_response(self, mock_get, mock_put):
         """Should redact GitHub token from error messages including response text."""
         token = "ghp_SECRET_TOKEN"

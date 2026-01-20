@@ -10,9 +10,9 @@ current_dir = os.path.dirname(os.path.realpath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# Import nodes
-from discord_image_node import DiscordSendSaveImage
-from discord_video_node import DiscordSendSaveVideo
+# Import nodes from nodes package
+from nodes.image_node import DiscordSendSaveImage
+from nodes.video_node import DiscordSendSaveVideo
 
 # Node class mappings for ComfyUI
 NODE_CLASS_MAPPINGS = {

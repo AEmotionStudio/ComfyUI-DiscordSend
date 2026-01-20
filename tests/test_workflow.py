@@ -6,8 +6,7 @@ import json
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from discordsend_utils.workflow_builder import WorkflowBuilder
-from discordsend_utils.prompt_extractor import extract_prompts_from_workflow
+from shared.workflow import WorkflowBuilder, extract_prompts_from_workflow
 
 class TestWorkflowBuilder(unittest.TestCase):
     """Tests for the WorkflowBuilder class."""
