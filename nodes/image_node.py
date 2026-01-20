@@ -750,7 +750,7 @@ class DiscordSendSaveImage:
                     print(f"Successfully sent batch of {len(batch_discord_files)} images to Discord as a gallery")
                     discord_send_success = True
                     discord_sent_files = ["batch_gallery"]  # Mark as successfully sent
-                    
+
                     # Extract CDN URLs and send file using shared utility
                     if save_cdn_urls:
                         new_urls = extract_cdn_urls_from_response(response)
@@ -762,8 +762,8 @@ class DiscordSendSaveImage:
                                 send_func=send_to_discord_with_retry,
                                 message="Discord CDN URLs for the uploaded images:"
                             )
-                    else:
-                        print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
+                else:
+                    print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
                     discord_send_success = False
             except Exception as e:
                 print(f"Error sending batch to Discord: {e}")
