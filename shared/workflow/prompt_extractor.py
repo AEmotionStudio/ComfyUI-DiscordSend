@@ -15,17 +15,25 @@ NEGATIVE_INDICATORS = [
     "extra limbs", "bad anatomy", "watermark", "text", "signature"
 ]
 
+# Node types that can contain prompts
+PROMPT_NODE_TYPES = [
+    "CLIPTextEncode",      # Standard SD 1.5 prompt node
+    "SDXLPromptEncoder",   # SDXL prompt encoder
+    "SDXLTextEncode",      # Another SDXL text node
+]
+
 
 def extract_prompts_from_workflow(workflow_data: Any) -> Tuple[Optional[str], Optional[str]]:
     """
     Extract positive and negative prompts from workflow data.
-    
-    Analyzes ComfyUI workflow structure to find CLIPTextEncode nodes and
+
+    Analyzes ComfyUI workflow structure to find prompt nodes (CLIPTextEncode,
+    SDXLPromptEncoder, SDXLTextEncode, and other text encoding nodes) and
     determine which contains the positive vs negative prompt.
-    
+
     Args:
         workflow_data: The workflow data dictionary or JSON string
-        
+
     Returns:
         A tuple of (positive_prompt, negative_prompt) or (None, None) if not found
     """
@@ -47,25 +55,25 @@ def extract_prompts_from_workflow(workflow_data: Any) -> Tuple[Optional[str], Op
     positive_prompt = None
     negative_prompt = None
     
-    # Find CLIPTextEncode nodes
+    # Find prompt nodes (CLIPTextEncode, SDXL nodes, etc.)
     if "nodes" in data:
         nodes = data["nodes"]
     else:
         # Check if it's API format (dict of nodes)
         nodes = data
-    
-    clip_nodes = _find_clip_text_encode_nodes(nodes)
-    
-    if not clip_nodes:
+
+    prompt_nodes = _find_prompt_nodes(nodes)
+
+    if not prompt_nodes:
         return None, None
     
     # Determine positive/negative based on content and structure
-    if len(clip_nodes) == 1:
-        # Single CLIP node - assume it's the positive prompt
-        positive_prompt = _get_prompt_text(clip_nodes[0])
-    elif len(clip_nodes) >= 2:
-        # Multiple CLIP nodes - need to determine which is which
-        positive_prompt, negative_prompt = _classify_prompts(clip_nodes, data)
+    if len(prompt_nodes) == 1:
+        # Single prompt node - assume it's the positive prompt
+        positive_prompt = _get_prompt_text(prompt_nodes[0])
+    elif len(prompt_nodes) >= 2:
+        # Multiple prompt nodes - need to determine which is which
+        positive_prompt, negative_prompt = _classify_prompts(prompt_nodes, data)
     
     # Ensure we return empty string for negative if we have positive but not negative
     if positive_prompt is not None and negative_prompt is None:
@@ -74,41 +82,47 @@ def extract_prompts_from_workflow(workflow_data: Any) -> Tuple[Optional[str], Op
     return positive_prompt, negative_prompt
 
 
-def _find_clip_text_encode_nodes(nodes: Union[List, Dict]) -> List[Dict]:
-    """Find all CLIPTextEncode nodes in the workflow."""
-    clip_nodes = []
-    
+def _find_prompt_nodes(nodes: Union[List, Dict]) -> List[Dict]:
+    """Find all prompt nodes (CLIPTextEncode, SDXL nodes, etc.) in the workflow."""
+    prompt_nodes = []
+
     if isinstance(nodes, list):
         for node in nodes:
-            if _is_clip_text_encode(node):
-                clip_nodes.append(node)
+            if _is_prompt_node(node):
+                prompt_nodes.append(node)
     elif isinstance(nodes, dict):
         for node_id, node in nodes.items():
-            if _is_clip_text_encode(node):
+            if _is_prompt_node(node):
                 node_copy = dict(node)
                 node_copy["id"] = node_id
-                clip_nodes.append(node_copy)
-    
-    return clip_nodes
+                prompt_nodes.append(node_copy)
+
+    return prompt_nodes
 
 
-def _is_clip_text_encode(node: Any) -> bool:
-    """Check if a node is a CLIPTextEncode node with valid text."""
+def _is_prompt_node(node: Any) -> bool:
+    """Check if a node is a prompt node (CLIPTextEncode, SDXL, etc.) with valid text."""
     if not isinstance(node, dict):
         return False
-    
+
     # Handle both Workflow format (type) and API format (class_type)
     node_type = node.get("type") or node.get("class_type")
-    if node_type != "CLIPTextEncode":
-        return False
-    
+
+    # Check against known prompt node types
+    if node_type not in PROMPT_NODE_TYPES:
+        # Also check for dynamic text/prompt nodes (e.g., custom nodes)
+        if node_type and ("Text" in node_type and ("Encode" in node_type or "Prompt" in node_type)):
+            pass  # Allow these through
+        else:
+            return False
+
     # Check for text in either widgets_values (Workflow) or inputs (API)
     text = _get_prompt_text(node)
     return text is not None
 
 
 def _get_prompt_text(node: Dict) -> Optional[str]:
-    """Extract the prompt text from a CLIP node."""
+    """Extract the prompt text from a prompt node."""
     # Workflow format (widgets_values)
     widgets = node.get("widgets_values", [])
     if isinstance(widgets, list) and len(widgets) > 0 and isinstance(widgets[0], str):
@@ -122,20 +136,20 @@ def _get_prompt_text(node: Dict) -> Optional[str]:
     return None
 
 
-def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Optional[str], Optional[str]]:
+def _classify_prompts(prompt_nodes: List[Dict], workflow_data: Dict) -> Tuple[Optional[str], Optional[str]]:
     """
-    Classify which CLIP nodes contain positive vs negative prompts.
-    
+    Classify which prompt nodes contain positive vs negative prompts.
+
     Uses multiple heuristics:
     1. Content analysis (negative prompts often contain quality-related terms)
     2. Connection analysis (traces connections to sampler nodes)
     """
-    if not clip_nodes:
+    if not prompt_nodes:
         return None, None
         
     # First pass: Score all nodes based on content
     node_scores = []
-    for node in clip_nodes:
+    for node in prompt_nodes:
         prompt_text = _get_prompt_text(node)
         # Skip empty or None text
         if not prompt_text or not prompt_text.strip():
@@ -169,14 +183,14 @@ def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Opti
     else:
         # All scores are 0, use connection analysis
         positive_prompt, negative_prompt = _classify_by_connections(
-            clip_nodes, workflow_data, None, None
+            prompt_nodes, workflow_data, None, None
         )
         
     # Fallback: if we still can't determine, use first two nodes
-    if positive_prompt is None and negative_prompt is None and len(clip_nodes) >= 2:
+    if positive_prompt is None and negative_prompt is None and len(prompt_nodes) >= 2:
         # Convention: assume first is positive, second is negative
-        positive_prompt = _get_prompt_text(clip_nodes[0])
-        negative_prompt = _get_prompt_text(clip_nodes[1])
+        positive_prompt = _get_prompt_text(prompt_nodes[0])
+        negative_prompt = _get_prompt_text(prompt_nodes[1])
     elif positive_prompt is None and negative_prompt is not None:
         # Find the other prompt
         for _, _, text in node_scores:
@@ -194,7 +208,7 @@ def _classify_prompts(clip_nodes: List[Dict], workflow_data: Dict) -> Tuple[Opti
 
 
 def _classify_by_connections(
-    clip_nodes: List[Dict],
+    prompt_nodes: List[Dict],
     workflow_data: Dict,
     existing_positive: Optional[str],
     existing_negative: Optional[str]
@@ -235,7 +249,7 @@ def _classify_by_connections(
         to_slot = link[3]
         
         # Find matching CLIP node and sampler
-        for clip_node in clip_nodes:
+        for clip_node in prompt_nodes:
             clip_id = clip_node.get("id")
             if clip_id == from_node_id:
                 for sampler in samplers:
