@@ -27,10 +27,12 @@ sys.modules['comfy'] = MagicMock()
 sys.modules['comfy.cli_args'] = MagicMock()
 sys.modules['comfy.cli_args'].args = MagicMock()
 sys.modules['comfy.cli_args'].args.disable_metadata = False
+sys.modules['comfy.utils'] = MagicMock()
 sys.modules['folder_paths'] = MagicMock()
 sys.modules['folder_paths'].get_output_directory = MagicMock(return_value="/tmp")
 sys.modules['folder_paths'].get_temp_directory = MagicMock(return_value="/tmp")
 sys.modules['folder_paths'].get_save_image_path = MagicMock(return_value=("/tmp", "test", 0, "", "test"))
+sys.modules['server'] = MagicMock()
 
 # We need real PIL for this test to verify PngInfo
 try:
@@ -39,7 +41,7 @@ except ImportError:
     # If it failed because it was mocked out and we deleted it, reload
     pass
 
-from discord_image_node import DiscordSendSaveImage
+from nodes.image_node import DiscordSendSaveImage
 
 class TestDiscordImageNodeOptimization(unittest.TestCase):
     def setUp(self):

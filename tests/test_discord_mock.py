@@ -3,6 +3,11 @@ import sys
 import os
 from unittest.mock import MagicMock, patch
 
+# Mock dependencies before importing project modules
+sys.modules["torch"] = MagicMock()
+sys.modules["numpy"] = MagicMock()
+sys.modules["cv2"] = MagicMock()
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

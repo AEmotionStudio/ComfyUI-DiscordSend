@@ -26,7 +26,7 @@ sys.modules["folder_paths"] = mock_folder_paths
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import the node
-from discord_video_node import DiscordSendSaveVideo
+from nodes.video_node import DiscordSendSaveVideo
 
 class TestTempFileLeak(unittest.TestCase):
     def setUp(self):
@@ -55,7 +55,7 @@ class TestTempFileLeak(unittest.TestCase):
         self.dummy_image.shape = (512, 512, 3) # height, width, channels
 
         # Mock tensor_to_numpy_uint8 in discordsend_utils
-        self.patcher_numpy = patch("discord_video_node.tensor_to_numpy_uint8")
+        self.patcher_numpy = patch("nodes.video_node.tensor_to_numpy_uint8")
         self.mock_numpy_conv = self.patcher_numpy.start()
         # Return a dummy numpy array
         import numpy as np
@@ -65,12 +65,12 @@ class TestTempFileLeak(unittest.TestCase):
         self.patcher_numpy.stop()
         shutil.rmtree(self.test_dir)
 
-    @patch("discord_video_node.subprocess.Popen")
-    @patch("discord_video_node.subprocess.run")
-    @patch("discord_video_node.send_to_discord_with_retry")
-    @patch("discord_video_node.Image")
-    @patch("discord_video_node.os.path.getsize")
-    @patch("discord_video_node.validate_video_for_discord")
+    @patch("nodes.video_node.subprocess.Popen")
+    @patch("nodes.video_node.subprocess.run")
+    @patch("nodes.video_node.send_to_discord_with_retry")
+    @patch("nodes.video_node.Image")
+    @patch("nodes.video_node.os.path.getsize")
+    @patch("nodes.video_node.validate_video_for_discord")
     def test_temp_file_leak(self, mock_validate, mock_getsize, mock_image, mock_send, mock_run, mock_popen):
         # Setup mocks
         mock_process = MagicMock()
