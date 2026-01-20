@@ -445,17 +445,26 @@ class DiscordSendSaveImage:
                 # Add image info if available
                 if "message_prefix" in image_info:
                     info_message = image_info["message_prefix"]
-                    
+
+                    # Check if we need to add dimensions
+                    has_resize_dimensions = "original_dimensions" in image_info and "resized_dimensions" in image_info
+                    has_dimensions = "dimensions" in image_info
+
+                    # Add section header if dimensions will be added but no other metadata exists
+                    if (has_resize_dimensions or has_dimensions) and not info_message:
+                        info_message = "\n\n**Image Information:**\n"
+
                     # Add dimensions info if available
-                    if "original_dimensions" in image_info and "resized_dimensions" in image_info:
+                    if has_resize_dimensions:
                         info_message += f"**Original Dimensions:** {image_info['original_dimensions']}\n"
                         info_message += f"**Resized Dimensions:** {image_info['resized_dimensions']} (Power of 2)\n"
-                    elif "dimensions" in image_info:
+                    elif has_dimensions:
                         info_message += f"**Dimensions:** {image_info['dimensions']}\n"
-                    
+
                     # Add the complete info message to the Discord message
-                    discord_message += info_message
-                    print("Added image information to Discord message")
+                    if info_message:
+                        discord_message += info_message
+                        print("Added image information to Discord message")
                 
                 # Add prompts after image info if available (decoupled from image info presence)
                 if "prompt_message" in image_info:
