@@ -3,6 +3,7 @@ from discord.ext import commands
 import logging
 import sys
 import asyncio
+import uuid
 from pathlib import Path
 
 from .config import BotConfig
@@ -32,9 +33,7 @@ class ComfyUIBot(commands.Bot):
         
         # Database
         self.repository = Repository(config.database.url)
-        
-        
-        import uuid
+
         self.client_id = str(uuid.uuid4())
         
         # ComfyUI Clients

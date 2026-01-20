@@ -5,7 +5,7 @@
 **Version:** 1.0
 **Date:** 2026-01-19
 **Author:** Claude Opus 4.5 + Human Review
-**Status:** In Progress (Phases 0-4 Complete)
+**Status:** In Progress (Phases 0-5 Complete)
 
 ---
 
@@ -248,13 +248,15 @@ comfyui-discordsend/
 - Add trailing newline to metadata section formatting (0d6ed9d)
 - **Status:** Complete (2026-01-20)
 
-### Phase 5: Complete Bot Features
-- WebSocket reconnection
-- Error delivery
-- Templates cog
-- History cog
-- Config templates
-- **Deliverable:** Fully functional bot
+### Phase 5: Complete Bot Features ✅ COMPLETE
+- WebSocket reconnection with exponential backoff
+- Error delivery to Discord users
+- Templates cog (`/template save/load/list/delete`)
+- History cog (`/history`, `/rerun`)
+- Config templates (already existed)
+- Fixed BotConfig import bug
+- **Status:** Complete (2026-01-20)
+- **Commit:** b083702
 
 ### Phase 6: Final Cleanup
 - Update documentation
@@ -275,7 +277,7 @@ comfyui-discordsend/
 | Utility modules | 6 | 17 | 12+ | ✅ Exceeded |
 | Code duplication | ~400 lines | ~200 | 0 | 🟡 In progress |
 | Test pass rate | 46/52 | 46/52 | 52/52 | 🟡 Maintained |
-| Bot features | 60% | 60% | 100% | ⬜ Phase 5 |
+| Bot features | 60% | 100% | 100% | ✅ Phase 5 Complete |
 
 **Notes:**
 - Node line counts don't include base_node.py (343 lines of reusable code)

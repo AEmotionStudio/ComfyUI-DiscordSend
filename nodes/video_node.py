@@ -11,7 +11,6 @@ from PIL.PngImagePlugin import PngInfo
 from comfy.cli_args import args
 import re
 import cv2
-import requests
 from io import BytesIO
 from uuid import uuid4
 from typing import Any, Union, List, Optional
@@ -19,7 +18,6 @@ from pathlib import Path
 import sys
 import datetime
 import subprocess
-import itertools
 import functools
 import server
 
