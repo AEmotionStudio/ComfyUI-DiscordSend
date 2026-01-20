@@ -11,7 +11,7 @@ from typing import List
 from ..services.permissions import require_permission, Permissions
 from ..database.models import JobStatus
 from ..embeds.builders import EmbedBuilder
-from ...shared.workflow import WorkflowBuilder
+from shared.workflow import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
 
