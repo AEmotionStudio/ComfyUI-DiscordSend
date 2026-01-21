@@ -67,7 +67,7 @@ class TestTempFileLeak(unittest.TestCase):
 
     @patch("nodes.video_node.subprocess.Popen")
     @patch("nodes.video_node.subprocess.run")
-    @patch("nodes.video_node.send_to_discord_with_retry")
+    @patch("nodes.base_node.send_to_discord_with_retry")
     @patch("nodes.video_node.Image")
     @patch("nodes.video_node.os.path.getsize")
     @patch("nodes.video_node.validate_video_for_discord")
