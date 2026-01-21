@@ -16,21 +16,19 @@ from typing import Any, Union, List, Optional
 # Import shared utilities
 from shared import (
     sanitize_json_for_export,
-    update_github_cdn_urls,
-    extract_prompts_from_workflow,
-    send_to_discord_with_retry,
     sanitize_token_from_text,
     tensor_to_numpy_uint8,
-    build_filename_with_metadata,
-    get_output_directory,
     build_metadata_section,
-    build_prompt_section,
+    send_to_discord_with_retry,
     extract_cdn_urls_from_response,
     send_cdn_urls_file
 )
 
+# Import base class
+from .base_node import BaseDiscordNode
 
-class DiscordSendSaveImage:
+
+class DiscordSendSaveImage(BaseDiscordNode):
     """
     A ComfyUI node that can send images to Discord and save them with advanced options.
     Images can be sent to Discord via webhook integration, while providing flexible
@@ -38,10 +36,7 @@ class DiscordSendSaveImage:
     """
     
     def __init__(self):
-        self.type = "output"
-        self.prefix_append = ""
-        self.compress_level = 4
-        self.output_dir = None  # Will be set during saving to store the actual path used
+        super().__init__()
 
     @classmethod
     def INPUT_TYPES(s):
@@ -227,16 +222,7 @@ class DiscordSendSaveImage:
         
         # Sanitize the workflow and extra_pnginfo data to remove webhook URLs
         # This protects user security when sharing images
-        # (but keep a copy of the original data for prompt extraction)
-        original_prompt = prompt
-        original_extra_pnginfo = extra_pnginfo
-        
-        # Ensure webhook URL is sanitized from workflow data for all file formats
-        if prompt is not None:
-            prompt = sanitize_json_for_export(prompt)
-        
-        if extra_pnginfo is not None:
-            extra_pnginfo = sanitize_json_for_export(extra_pnginfo)
+        prompt, extra_pnginfo, original_prompt, original_extra_pnginfo = self.sanitize_workflow_data(prompt, extra_pnginfo)
             
         # Double-check webhook URL removal for Discord-specific data
         if send_to_discord:
@@ -244,24 +230,16 @@ class DiscordSendSaveImage:
             if send_workflow_json and extra_pnginfo is not None and "workflow" in extra_pnginfo:
                 extra_pnginfo["workflow"] = sanitize_json_for_export(extra_pnginfo["workflow"])
         
-        # Build filename with date/time metadata using shared utility
+        # Build filename with date/time metadata using base class method
         image_info = {}
-        filename_prefix, image_info = build_filename_with_metadata(
-            prefix=filename_prefix,
+        filename_prefix, image_info = self.build_filename_prefix(
+            filename_prefix=filename_prefix,
             add_date=add_date,
-            add_time=add_time,
-            info_dict=image_info
+            add_time=add_time
         )
-
-        # Add prefix append
-        filename_prefix += self.prefix_append
         
-        # Get output directory using shared utility
-        dest_folder = get_output_directory(
-            save_output=save_output,
-            comfy_output_dir=folder_paths.get_output_directory(),
-            temp_dir=folder_paths.get_temp_directory()
-        )
+        # Get output directory using base class method
+        dest_folder = self.get_dest_folder(save_output)
         
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
@@ -352,23 +330,13 @@ class DiscordSendSaveImage:
             image_info["message_prefix"] = info_message
             print("Prepared image information section for Discord message")
 
-        # Extract and build prompts section using shared utilities
+        # Extract and build prompts section using base class methods
         if send_to_discord and include_prompts_in_message:
-            workflow_data = None
-
-            # First try to get workflow from extra_pnginfo
-            if original_extra_pnginfo is not None and isinstance(original_extra_pnginfo, dict) and "workflow" in original_extra_pnginfo:
-                workflow_data = original_extra_pnginfo["workflow"]
-
-            # If no workflow in extra_pnginfo, check if prompt is actually a workflow
-            if workflow_data is None and original_prompt is not None:
-                if isinstance(original_prompt, dict) and "nodes" in original_prompt:
-                    workflow_data = original_prompt
+            workflow_data = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
 
             # Extract and build prompts section
             if workflow_data is not None:
-                positive_prompt, negative_prompt = extract_prompts_from_workflow(workflow_data)
-                prompt_section = build_prompt_section(positive_prompt, negative_prompt)
+                prompt_section = self.build_prompt_message(workflow_data)
                 if prompt_section:
                     image_info["prompt_message"] = prompt_section
                     print("Prepared prompts for Discord message")
