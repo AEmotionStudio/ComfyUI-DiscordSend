@@ -42,13 +42,17 @@ class ComfyUIWebSocket:
         # Lock to prevent race conditions between connect() and disconnect()
         self._state_lock = asyncio.Lock()
 
-    async def connect(self):
-        """Connect to the WebSocket."""
+    async def connect(self) -> bool:
+        """Connect to the WebSocket.
+        
+        Returns:
+            True if connection was established successfully, False if aborted.
+        """
         async with self._state_lock:
             # Check if disconnect was called - don't proceed if so
             if not self._should_reconnect:
                 logger.info("Connect aborted: disconnect was requested")
-                return
+                return False
                 
             if self.session is None or self.session.closed:
                 self.session = aiohttp.ClientSession()
@@ -62,11 +66,12 @@ class ComfyUIWebSocket:
                         await self.ws.close()
                     if self.session and not self.session.closed:
                         await self.session.close()
-                    return
+                    return False
                 self._running = True
                 self._reconnect_attempts = 0  # Reset on successful connection
                 self._listen_task = asyncio.create_task(self._listen())
                 logger.info(f"Connected to ComfyUI WebSocket at {self.ws_url}")
+                return True
             except Exception as e:
                 logger.error(f"Failed to connect to WebSocket: {e}")
                 if self.session and not self.session.closed:
@@ -183,12 +188,17 @@ class ComfyUIWebSocket:
 
             try:
                 attempts_made = self._reconnect_attempts
-                await self.connect()
-                logger.info(
-                    f"Successfully reconnected after "
-                    f"{attempts_made} attempt(s)."
-                )
-                return
+                connected = await self.connect()
+                if connected:
+                    logger.info(
+                        f"Successfully reconnected after "
+                        f"{attempts_made} attempt(s)."
+                    )
+                    return
+                else:
+                    # connect() returned False - disconnect was called
+                    logger.info("Reconnection aborted: disconnect was requested")
+                    return
             except Exception as e:
                 logger.warning(f"Reconnection attempt failed: {e}")
 
