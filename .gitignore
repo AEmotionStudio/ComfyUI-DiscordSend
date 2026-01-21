@@ -23,3 +23,17 @@ REPO_BREAKDOWN.md
 .jules/
 .Jules/
 .claude/
+.venv/
+venv/
+
+# Standard Python/Test Artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+build/
+dist/
+*.egg-info/
+.mypy_cache/
+
+# Likely test artifact
+MagicMock/

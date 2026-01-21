@@ -23,19 +23,12 @@ import server
 
 # Import shared utilities
 from shared import (
-    sanitize_json_for_export,
-    update_github_cdn_urls,
-    send_to_discord_with_retry,
-    sanitize_token_from_text,
     tensor_to_numpy_uint8,
-    build_filename_with_metadata,
-    get_output_directory,
-    build_metadata_section,
-    build_prompt_section,
-    extract_cdn_urls_from_response,
-    send_cdn_urls_file,
-    extract_prompts_from_workflow
+    build_metadata_section
 )
+# Add BaseDiscordNode import
+from .base_node import BaseDiscordNode
+
 from shared.media import (
     validate_video_for_discord,
     normalize_video_extension,
@@ -114,7 +107,7 @@ def process_batched_images(image_sequence, batch_size=20):
         for img in image_sequence:
             yield np.ascontiguousarray(tensor_to_numpy_uint8(img))
 
-class DiscordSendSaveVideo:
+class DiscordSendSaveVideo(BaseDiscordNode):
     """
     A ComfyUI node that can send videos to Discord and save them with advanced options.
     Videos can be sent to Discord via webhook integration, while providing flexible
@@ -122,6 +115,7 @@ class DiscordSendSaveVideo:
     """
     
     def __init__(self):
+        super().__init__()
         self.type = "output"
         self.prefix_append = ""
         self.compress_level = 4
@@ -132,6 +126,11 @@ class DiscordSendSaveVideo:
         """
         Define the input types for the DiscordSendSaveVideo node.
         """
+        # Get base inputs from BaseDiscordNode
+        base_inputs = BaseDiscordNode.get_discord_input_types()
+        cdn_inputs = BaseDiscordNode.get_cdn_input_types()
+        filename_inputs = BaseDiscordNode.get_filename_input_types(add_date_default=True)
+
         # Determine format options and defaults based on ffmpeg availability
         if ffmpeg_path is None:
             print("ffmpeg not found. Video output will be limited or unavailable.")
@@ -218,70 +217,16 @@ class DiscordSendSaveVideo:
                     "tooltip": "Optional audio to embed in the video."
                 }),
                 
-                # Filename options
-                "add_date": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Add the current date (YYYY-MM-DD) to filenames."
-                }),
-                "add_time": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Add time to filenames. ⚠️ KEEP ENABLED for Discord videos! Disabling causes playback failure (single frame bug). To hide info in chat, disable 'include_video_info' instead."
-                }),
-                "add_dimensions": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Add width and height dimensions to the filename (WxH format)."
-                }),
-                
-                # Discord options
-                "send_to_discord": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Whether to send the videos to Discord via webhook."
-                }),
-                "webhook_url": ("STRING", {
-                    "default": "", 
-                    "multiline": False,
-                    "tooltip": "Secure Discord webhook URL (found in Server Settings > Integrations > Webhooks). Treated as sensitive data. Leave empty to disable."
-                }),
-                "discord_message": ("STRING", {
-                    "default": "", 
-                    "multiline": True,
-                    "tooltip": "Optional text to display with the video. Supports Discord Markdown (e.g. **bold**, *italic*, > quote)."
-                }),
-                "include_prompts_in_message": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Whether to include the positive and negative prompts in the Discord message."
-                }),
+                # Video Info Option
                 "include_video_info": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "Whether to include the video information (frame rate, format) in the Discord message."
                 }),
-                "send_workflow_json": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Whether to send the workflow JSON alongside the video to Discord, allowing dragging the JSON into ComfyUI to restore the workflow."
-                }),
-                "save_cdn_urls": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Whether to save the Discord CDN URLs of the uploaded videos as a text file and attach it to the Discord message."
-                }),
-                "github_cdn_update": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Whether to update a GitHub repository with the Discord CDN URLs."
-                }),
-                "github_repo": ("STRING", {
-                    "default": "", 
-                    "multiline": False,
-                    "tooltip": "GitHub repository to update with CDN URLs (format: username/repo, e.g. 'AEmotionStudio/ComfyUI-DiscordSend')."
-                }),
-                "github_token": ("STRING", {
-                    "default": "", 
-                    "multiline": False,
-                    "tooltip": "GitHub personal access token with 'repo' permissions (Settings -> Developer settings -> Personal access tokens). Keep this private!"
-                }),
-                "github_file_path": ("STRING", {
-                    "default": "cdn_urls.md", 
-                    "multiline": False,
-                    "tooltip": "Path to the file within the GitHub repository to update with CDN URLs."
-                })
+                
+                # Mix in shared options
+                **filename_inputs,
+                **base_inputs,
+                **cdn_inputs,
             },
             "hidden": {
                 "prompt": "PROMPT", 
@@ -320,25 +265,10 @@ class DiscordSendSaveVideo:
         discord_sent_files = []
         discord_send_success = True
         
-        # For tracking Discord CDN URLs
-        discord_cdn_urls = []
-        
-        # Store original prompt for later processing but sanitize it for security
-        original_prompt = prompt
-        original_extra_pnginfo = extra_pnginfo
-        
-        # Sanitize the workflow and extra_pnginfo data to remove webhook URLs
-        # This protects user security when sharing workflows
-        if prompt is not None:
-            prompt = sanitize_json_for_export(prompt)
-        
-        if extra_pnginfo is not None:
-            extra_pnginfo = sanitize_json_for_export(extra_pnginfo)
-            
-        # Ensure workflow JSON is sanitized if sending to Discord
-        if send_to_discord and send_workflow_json and original_prompt is not None:
-            # Double sanitization for Discord export to ensure all webhook URLs are removed
-            workflow_export = sanitize_json_for_export(original_prompt)
+        # 1. Sanitize workflow data using base class method
+        prompt, extra_pnginfo, original_prompt, original_extra_pnginfo = self.sanitize_workflow_data(
+            prompt, extra_pnginfo
+        )
         
         # Get number of frames and set up progress bar
         num_frames = len(images)
@@ -351,28 +281,18 @@ class DiscordSendSaveVideo:
         # Get first image for metadata
         first_image = images[0]
         
-        # Build filename with date/time/dimensions metadata using shared utility
+        # 2. Build filename prefix with metadata using base class method
         height, width = images[0].shape[0], images[0].shape[1]
         video_info = {}
-        filename_prefix, video_info = build_filename_with_metadata(
-            prefix=filename_prefix,
-            add_date=add_date,
-            add_time=add_time,
-            add_dimensions=add_dimensions,
-            width=width,
-            height=height,
-            info_dict=video_info
+        filename_prefix, video_info = self.build_filename_prefix(
+            filename_prefix, add_date, add_time, add_dimensions, width, height
         )
 
         # Add prefix append
         filename_prefix += self.prefix_append
-
-        # Get output directory using shared utility
-        dest_folder = get_output_directory(
-            save_output=save_output,
-            comfy_output_dir=folder_paths.get_output_directory(),
-            temp_dir=folder_paths.get_temp_directory()
-        )
+        
+        # 3. Get output directory using base class method
+        dest_folder = self.get_dest_folder(save_output)
             
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
@@ -881,9 +801,9 @@ class DiscordSendSaveVideo:
                     except Exception as e:
                         print(f"Error preparing workflow for Discord: {str(e)}")
                 
-                # Prepare message content
-                message_content = discord_message
-
+                # Initialize message content with user message
+                message_content = discord_message if discord_message else ""
+                
                 # Add video metadata to Discord message using shared utility
                 if include_video_info:
                     metadata_section = build_metadata_section(
@@ -897,183 +817,112 @@ class DiscordSendSaveVideo:
                         section_title="Video Info"
                     )
                     if metadata_section:
+                        if message_content:
+                            message_content += "\n\n"
                         message_content += metadata_section
                         print(f"Added video metadata to Discord message: {len(metadata_section)} chars")
-                else:
-                    print("Video info was not included in Discord message (disabled by user)")
                 
-                # Include the generation prompts if requested using shared utilities
+                # Include the generation prompts if requested
                 if include_prompts_in_message:
-                    workflow_data = None
-
-                    # First try to get workflow from extra_pnginfo
-                    if original_extra_pnginfo is not None and isinstance(original_extra_pnginfo, dict) and "workflow" in original_extra_pnginfo:
-                        workflow_data = original_extra_pnginfo["workflow"]
-
-                    # If no workflow in extra_pnginfo, check if prompt is actually a workflow
-                    if workflow_data is None and original_prompt is not None:
-                        if isinstance(original_prompt, dict) and "nodes" in original_prompt:
-                            workflow_data = original_prompt
-
-                    # Extract and build prompts section using shared utilities
-                    if workflow_data is not None:
-                        positive_prompt, negative_prompt = extract_prompts_from_workflow(workflow_data)
-                        prompt_section = build_prompt_section(positive_prompt, negative_prompt)
-                        if prompt_section:
-                            message_content += prompt_section
+                    # Use helper to extract workflow data
+                    wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
+                    
+                    if wflow:
+                        # Use helper to build prompt message
+                        prompt_msg = self.build_prompt_message(wflow)
+                        if prompt_msg:
+                            if message_content:
+                                message_content += "\n\n"
+                            message_content += prompt_msg
                             print("Successfully added prompts to Discord message")
-                    else:
-                        print("No workflow data found for prompt extraction")
-                
-                # Send videos to Discord
-                # Use requests to send files to Discord webhook
-                discord_data = {"content": message_content} if message_content else {}
-                
-                # Debug the message content to make sure prompts are included
-                print(f"Final Discord message content length: {len(message_content) if message_content else 0} characters")
-                if message_content:
-                    lines = message_content.split('\n')
-                    print(f"Message has {len(lines)} lines")
-                    if "Generation Prompts" in message_content:
-                        print("Message contains 'Generation Prompts' section")
-                    else:
-                        print("WARNING: Message does NOT contain 'Generation Prompts' section")
                 
                 # Prepare files for upload
-                files = []
+                files = {}
                 
                 # Use our optimized file for Discord instead of the original
                 # If discord_optimized_file is None, it means we use the original file
-                file_path = discord_optimized_file if discord_optimized_file else input_file
+                file_path_to_send = discord_optimized_file if discord_optimized_file else input_file
+                
+                # Validate video before sending
+                is_valid, validation_message = validate_video_for_discord(file_path_to_send)
+                if not is_valid:
+                    print(f"WARNING: {validation_message}")
+                    print("Will attempt to send file to Discord anyway.")
+                else:
+                    print(f"Video validation for Discord: {validation_message}")
                 
                 try:
-                    # Validate the video file before sending to Discord
-                    is_valid, validation_message = validate_video_for_discord(file_path)
-                    if not is_valid:
-                        print(f"WARNING: {validation_message}")
-                        print("Will attempt to send file to Discord anyway.")
-                    else:
-                        print(f"Video validation for Discord: {validation_message}")
-                    
-                    # Add main video file
-                    with open(file_path, 'rb') as f:
+                    with open(file_path_to_send, 'rb') as f:
                         file_content = f.read()
-                        # Use UUID to generate a unique filename for Discord
-                        # This is better than using the original filename to prevent issues with duplicate filenames
-                        original_extension = os.path.splitext(file_path)[1].lstrip('.')
+                        
+                        # Generate unique filename for Discord
+                        # Use UUID to prevent filename collisions
+                        original_extension = os.path.splitext(file_path_to_send)[1].lstrip('.')
                         discord_filename = f"{uuid4()}.{original_extension}"
                         
-                        # Determine MIME type for Discord
-                        mime_type = ""
-                        if original_extension == "mp4":
-                            mime_type = "video/mp4"
-                        elif original_extension == "webm":
-                            mime_type = "video/webm"
-                        elif original_extension == "gif":
-                            mime_type = "image/gif"
-                        elif original_extension == "webp":
-                            mime_type = "image/webp"
-                        elif original_extension == "mov":
-                            mime_type = "video/quicktime"
+                        files["file"] = (discord_filename, file_content)
+                        
+                        # Add workflow JSON if requested
+                        if send_workflow_json:
+                             wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
+                             if wflow:
+                                 json_filename = f"{uuid4()}.json"
+                                 json_data = json.dumps(wflow, indent=2).encode('utf-8')
+                                 files["workflow"] = (json_filename, json_data)
+                        
+                        data = {}
+                        if message_content:
+                            data["content"] = message_content
+                        
+                        # Send to Discord using base class helper
+                        success, response, new_urls = self.send_discord_files(webhook_url, files, data, save_cdn_urls)
+                        
+                        if success:
+                            discord_sent_files.append(discord_filename)
+                            print(f"Successfully sent video to Discord with filename: {discord_filename}")
+                            if new_urls:
+                                discord_cdn_urls.extend(new_urls)
+                                self.send_cdn_urls_to_discord(webhook_url, new_urls, "Discord CDN URLs for the uploaded video:")
                         else:
-                            # Default to video/extension
-                            mime_type = f"video/{original_extension}"
-                        
-                        # Log the file details for debugging
-                        print(f"Sending file to Discord: {file_path}")
-                        print(f"File size: {len(file_content)} bytes")
-                        print(f"Using MIME type: {mime_type}")
-                        print(f"Discord filename: {discord_filename}")
-                        
-                        files.append(('file', (discord_filename, file_content, mime_type)))
-                except Exception as e:
-                    print(f"Error preparing video file for Discord: {str(e)}")
-                    discord_send_success = False
-                
-                # Add workflow JSON if requested
-                if workflow_file:
-                    # Also use UUID for the JSON file to ensure uniqueness
-                    json_filename = f"{uuid4()}.json"
-                    files.append(('workflow', (json_filename, workflow_file.getvalue(), 'application/json')))
-                
-                # Send to Discord with retry logic
-                response = send_to_discord_with_retry(
-                    webhook_url,
-                    data=discord_data,
-                    files=files
-                )
-                
-                # Discord can return either 204 (no content) or 200 (success with content) for successful requests
-                if response.status_code in [200, 204]:
-                    discord_sent_files.append(discord_filename)  # Store the Discord UUID filename instead of local path
-                    print(f"Successfully sent video to Discord with filename: {discord_filename}")
-                    
-                    # Extract CDN URLs using shared utility
-                    if save_cdn_urls:
-                        new_urls = extract_cdn_urls_from_response(response)
-                        discord_cdn_urls.extend(new_urls)
-                else:
-                    error_msg = sanitize_token_from_text(response.text, webhook_url)
-                    print(f"Discord API error: {response.status_code} - {error_msg}")
-                    discord_send_success = False
-            
-            except Exception as e:
-                print(f"Error sending to Discord: {str(e)}")
-                discord_send_success = False
+                            print(f"Error sending video to Discord: Status code {response.status_code}")
+                            discord_send_success = False
 
+                except Exception as e:
+                    print(f"Error preparing/sending video to Discord: {e}")
+                    discord_send_success = False
+
+                finally:
+                    # Clean up temp file
+                    if discord_optimized_file and os.path.exists(discord_optimized_file):
+                        try:
+                            os.remove(discord_optimized_file)
+                            print(f"Cleaned up temporary file: {discord_optimized_file}")
+                        except Exception as e:
+                            print(f"Error cleaning up temporary file: {e}")
+
+            except Exception as e:
+                print(f"Error in Discord processing (outer): {e}")
+                discord_send_success = False
+                
             finally:
-                # Security: Ensure temporary optimized file is deleted to prevent disk filling
+                # Security: Ensure temporary optimized file is deleted
                 if discord_optimized_file and os.path.exists(discord_optimized_file):
                     try:
                         os.remove(discord_optimized_file)
-                        print(f"Cleaned up temporary file: {discord_optimized_file}")
-                    except Exception as e:
-                        print(f"Error cleaning up temporary file: {e}")
-
-            # Send CDN URLs file using shared utility
-            if save_cdn_urls and discord_cdn_urls:
-                send_cdn_urls_file(
-                    webhook_url=webhook_url,
-                    urls=discord_cdn_urls,
-                    send_func=send_to_discord_with_retry,
-                    message="Discord CDN URLs for the uploaded videos:"
-                )
-        
-        # Update GitHub repository with CDN URLs if enabled
+                    except Exception:
+                        pass
+                        
+        # Update GitHub repository
         if github_cdn_update and send_to_discord and discord_cdn_urls:
-            # Use the collected CDN URLs for GitHub update
-            print(f"GitHub update is enabled with: repo={github_repo}, token_provided={'Yes' if github_token else 'No'}, file_path={github_file_path}")
-            print(f"Number of available CDN URLs to update GitHub: {len(discord_cdn_urls)}")
-            
-            if discord_cdn_urls:
-                # Call the GitHub update function
-                print(f"Updating GitHub repository {github_repo} with {len(discord_cdn_urls)} Discord CDN URLs...")
-                success, message = update_github_cdn_urls(
-                    github_repo=github_repo,
-                    github_token=github_token,
-                    file_path=github_file_path,
-                    cdn_urls=discord_cdn_urls
-                )
-                if success:
-                    print(f"GitHub update successful: {message}")
-                else:
-                    print(f"GitHub update failed: {message}")
-            else:
-                print("No CDN URLs available to update GitHub repository")
+             self.update_github_cdn(discord_cdn_urls, github_repo, github_token, github_file_path)
+             
         elif github_cdn_update:
-            # If GitHub update is enabled but not triggered, explain why
             reasons = []
-            if not send_to_discord:
-                reasons.append("send_to_discord is disabled")
-            if not discord_cdn_urls:
-                reasons.append("no CDN URLs were collected (did Discord upload succeed?)")
-            if not github_repo:
-                reasons.append("github_repo is empty")
-            if not github_token:
-                reasons.append("github_token is empty")
-            if not github_file_path:
-                reasons.append("github_file_path is empty")
-            
+            if not send_to_discord: reasons.append("send_to_discord is disabled")
+            if not discord_cdn_urls: reasons.append("no CDN URLs were collected")
+            if not github_repo: reasons.append("github_repo is empty")
+            if not github_token: reasons.append("github_token is empty")
+            if not github_file_path: reasons.append("github_file_path is empty")
             print(f"GitHub update was enabled but not triggered because: {', '.join(reasons)}")
         
         # Check if any output files were created
