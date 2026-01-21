@@ -19,6 +19,7 @@ from shared import (
     update_github_cdn_urls,
     extract_prompts_from_workflow,
     send_to_discord_with_retry,
+    sanitize_token_from_text,
     tensor_to_numpy_uint8,
     build_filename_with_metadata,
     get_output_directory,
@@ -771,7 +772,8 @@ class DiscordSendSaveImage:
                                 message="Discord CDN URLs for the uploaded images:"
                             )
                 else:
-                    print(f"Error sending batch to Discord: Status code {response.status_code} - {response.text}")
+                    error_msg = sanitize_token_from_text(response.text, webhook_url)
+                    print(f"Error sending batch to Discord: Status code {response.status_code} - {error_msg}")
                     discord_send_success = False
             except Exception as e:
                 print(f"Error sending batch to Discord: {e}")
