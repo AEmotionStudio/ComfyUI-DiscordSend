@@ -26,6 +26,7 @@ from shared import (
     sanitize_json_for_export,
     update_github_cdn_urls,
     send_to_discord_with_retry,
+    sanitize_token_from_text,
     tensor_to_numpy_uint8,
     build_filename_with_metadata,
     get_output_directory,
@@ -984,7 +985,8 @@ class DiscordSendSaveVideo:
                         new_urls = extract_cdn_urls_from_response(response)
                         discord_cdn_urls.extend(new_urls)
                 else:
-                    print(f"Discord API error: {response.status_code} - {response.text}")
+                    error_msg = sanitize_token_from_text(response.text, webhook_url)
+                    print(f"Discord API error: {response.status_code} - {error_msg}")
                     discord_send_success = False
             
             except Exception as e:

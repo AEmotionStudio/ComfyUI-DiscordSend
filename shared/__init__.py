@@ -15,7 +15,8 @@ from .workflow.workflow_builder import WorkflowBuilder
 from .discord.webhook_client import (
     DiscordWebhookClient,
     validate_webhook_url,
-    send_to_discord_with_retry
+    send_to_discord_with_retry,
+    sanitize_token_from_text
 )
 from .discord.message_builder import (
     build_metadata_section,
@@ -42,6 +43,7 @@ __all__ = [
     'DiscordWebhookClient',
     'validate_webhook_url',
     'send_to_discord_with_retry',
+    'sanitize_token_from_text',
     # Discord message building
     'build_metadata_section',
     'build_prompt_section',

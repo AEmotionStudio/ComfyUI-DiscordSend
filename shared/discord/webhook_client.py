@@ -70,6 +70,31 @@ def sanitize_webhook_for_logging(url: str) -> str:
     return "[REDACTED_WEBHOOK_URL]"
 
 
+def sanitize_token_from_text(text: str, webhook_url: str) -> str:
+    """
+    Sanitize the webhook token from arbitrary text.
+
+    Args:
+        text: The text to sanitize
+        webhook_url: The webhook URL containing the token
+
+    Returns:
+        Text with the token replaced by [REDACTED]
+    """
+    if not text or not webhook_url:
+        return text
+
+    # Pattern: https://discord.com/api/webhooks/{id}/{token}
+    # Use case-insensitive matching to handle potential variations
+    match = re.search(r"/api/webhooks/\d+/([\w-]+)", webhook_url, re.IGNORECASE)
+    if match:
+        token = match.group(1)
+        if token in text:
+            return text.replace(token, "[REDACTED]")
+
+    return text
+
+
 class DiscordWebhookClient:
     """
     Client for sending messages and files to Discord via webhooks.
@@ -243,9 +268,10 @@ class DiscordWebhookClient:
                 
                 # Client errors (don't retry)
                 if 400 <= response.status_code < 500:
+                    sanitized_details = sanitize_token_from_text(response.text[:500], self.webhook_url)
                     return False, {
                         "error": f"Discord API error: {response.status_code}",
-                        "details": response.text[:500]
+                        "details": sanitized_details
                     }
                 
                 # Server errors (retry)
@@ -255,14 +281,7 @@ class DiscordWebhookClient:
                 last_error = "Request timed out"
             except requests.exceptions.RequestException as e:
                 # Sanitize error message to prevent token leakage
-                error_msg = str(e)
-                # Use case-insensitive matching to handle uppercase URLs
-                match = re.search(r"/api/webhooks/\d+/([\w-]+)", self.webhook_url, re.IGNORECASE)
-                if match:
-                    token = match.group(1)
-                    if token in error_msg:
-                        error_msg = error_msg.replace(token, "[REDACTED]")
-
+                error_msg = sanitize_token_from_text(str(e), self.webhook_url)
                 last_error = error_msg
             
             # Exponential backoff
@@ -405,17 +424,12 @@ def send_to_discord_with_retry(
             last_exception = requests.exceptions.Timeout("Discord request timed out")
         except requests.exceptions.RequestException as e:
             # Sanitize error message to prevent token leakage
-            error_msg = str(e)
-            # Use case-insensitive matching to handle uppercase URLs
-            match = re.search(r"/api/webhooks/\d+/([\w-]+)", webhook_url, re.IGNORECASE)
-            if match:
-                token = match.group(1)
-                if token in error_msg:
-                    error_msg = error_msg.replace(token, "[REDACTED]")
-
+            error_msg = sanitize_token_from_text(str(e), webhook_url)
             logger.warning(f"Request error: {error_msg}, attempt {attempt + 1}/{max_retries}")
 
             # Store sanitized exception to avoid leaking token if raised later
+            # Use case-insensitive matching to handle uppercase URLs
+            match = re.search(r"/api/webhooks/\d+/([\w-]+)", webhook_url, re.IGNORECASE)
             if match and match.group(1) in str(e):
                 # Create a new exception of the same type with sanitized message
                 # We try to preserve the exception type, but fallback to RequestException if init fails
