@@ -1,0 +1,20 @@
+# Discord Bot Dependencies
+# Install with: pip install -r requirements-bot.txt
+
+# Shared with nodes
+requests>=2.25.0
+
+# Discord bot framework
+discord.py>=2.3.0
+
+# Async HTTP client for ComfyUI API
+aiohttp>=3.9.0
+
+# Database ORM for job tracking
+sqlalchemy>=2.0.0
+
+# Async SQLite driver
+aiosqlite>=0.19.0
+
+# YAML config parsing
+pyyaml>=6.0.0

@@ -112,12 +112,18 @@
 cd /path/to/ComfyUI/custom_nodes
 git clone https://github.com/AEmotionStudio/ComfyUI-DiscordSend
 cd ComfyUI-DiscordSend
-pip install -r requirements.txt  # Installs the minimal requirements (only the requests library)
+
+# For nodes only (minimal - just the requests library):
+pip install -r requirements-nodes.txt
+
+# For full bot support (Discord bot + all features):
+pip install -r requirements-bot.txt
 ```
 
 > [!IMPORTANT]
 > - For video functionality, ffmpeg must be installed on your system. The node will automatically detect its presence.
-> - This extension has minimal dependencies, requiring only the 'requests' library which is included in the requirements.txt file.
+> - **Nodes only** require just the `requests` library (1 dependency).
+> - **Discord bot** requires additional dependencies (discord.py, aiohttp, sqlalchemy, etc.).
 
 ## ⚙️ Settings
 
