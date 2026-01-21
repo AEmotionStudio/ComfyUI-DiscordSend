@@ -99,7 +99,20 @@ class TestDiscordImageNodeOptimization(unittest.TestCase):
         }
 
         # Mock Image.save to check metadata
-        with patch('PIL.Image.Image.save') as mock_save:
+        # Also mock tensor_to_numpy_uint8 to bypass torch tensor conversion (torch is mocked)
+        # and Image.fromarray to return a mock PIL Image with proper size attribute
+        mock_pil_image = MagicMock()
+        mock_pil_image.size = (64, 64)
+        mock_pil_image.mode = 'RGB'
+        
+        def mock_tensor_to_numpy(tensor):
+            # Return a simple numpy-like array (64x64x3 zeros as uint8)
+            import numpy as np
+            return np.zeros((64, 64, 3), dtype=np.uint8)
+        
+        with patch('PIL.Image.Image.save') as mock_save, \
+             patch('nodes.image_node.tensor_to_numpy_uint8', side_effect=mock_tensor_to_numpy), \
+             patch('PIL.Image.fromarray', return_value=mock_pil_image):
             self.node.save_images(
                 images=mock_image,
                 prompt=prompt,

@@ -69,10 +69,12 @@ class TestImageResizing(unittest.TestCase):
     
     def test_power_of_two_math(self):
         """Verify the power-of-two calculation logic used in the node."""
-        import numpy as np
+        # Use Python's built-in math module instead of numpy
+        # to avoid test collection order issues with mocked modules
+        import math
         
         def calculate_nearest_pow2(dim):
-            return 2 ** int(np.log2(dim) + 0.5)
+            return 2 ** int(math.log2(dim) + 0.5)
             
         self.assertEqual(calculate_nearest_pow2(500), 512)
         self.assertEqual(calculate_nearest_pow2(700), 512) # log2(700) = 9.45, +0.5 = 9.95, int=9, 2^9=512
