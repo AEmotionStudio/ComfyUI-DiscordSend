@@ -20,3 +20,16 @@
 - Converting a large PIL Image back to a Numpy array (`np.array(img)`) is surprisingly slow (measured ~500ms for 4K image).
 - When the PIL Image wraps an existing Numpy array and hasn't been modified (e.g. resized), reusing the original Numpy array avoids this overhead completely.
 **Action:** Track modifications to PIL images (like resizing) and reuse the source Numpy array for OpenCV operations if no modifications occurred.
+
+## 2026-01-21 - Batched GPU-CPU Transfer for Video
+**Learning:**
+- Processing video frames individually (GPU tensor -> CPU numpy) incurs high synchronization and kernel launch overhead.
+- Batching frames (e.g., 20 frames/batch) during transfer amortizes this overhead, speeding up processing significantly.
+- However, batching too many frames at once can lead to OOM on the CPU side due to large intermediate float tensors.
+**Action:** Use a generator pattern with a safe batch size (e.g., 20) to process video tensors in chunks, balancing speed with memory usage.
+
+## 2026-01-21 - In-place Tensor Operations
+**Learning:**
+- Chained tensor operations like `(tensor * 255).clamp(0, 255)` create new intermediate tensors at each step.
+- Using in-place operations like `.clamp_(0, 255)` on temporary results avoids allocating full-size tensors, saving memory and allocation time.
+**Action:** Prefer in-place operations (method names ending in `_`) when modifying temporary tensors that are not referenced elsewhere.

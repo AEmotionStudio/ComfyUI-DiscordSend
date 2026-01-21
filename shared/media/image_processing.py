@@ -20,4 +20,5 @@ def tensor_to_numpy_uint8(tensor: torch.Tensor) -> np.ndarray:
     """
     # Optimization: Use torch operations for scaling/clipping/casting to avoid large float64 intermediate arrays on CPU
     # This is ~70% faster than naive numpy conversion: np.clip(255. * tensor.cpu().numpy(), 0, 255).astype(np.uint8)
-    return (tensor * 255.0).clamp(0, 255).to(dtype=torch.uint8).cpu().numpy()
+    # Further Optimization: Use clamp_ (in-place) to avoid allocating a second float tensor
+    return (tensor * 255.0).clamp_(0, 255).to(dtype=torch.uint8).cpu().numpy()

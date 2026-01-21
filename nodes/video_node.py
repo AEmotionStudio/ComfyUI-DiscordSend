@@ -86,6 +86,34 @@ except ImportError:
         def update(self, advance=1):
             self.current += advance
             print(f"Progress: {self.current}/{self.total}", end="\r")
+
+def process_batched_images(image_sequence, batch_size=20):
+    """
+    Generator that processes images in batches to optimize GPU-CPU transfer.
+
+    Args:
+        image_sequence: A torch.Tensor or list of tensors/images
+        batch_size: Number of frames to process at once for Tensor inputs
+
+    Yields:
+        Numpy array for each frame, contiguous and ready for ffmpeg
+    """
+    # Optimized path for Tensor input
+    if isinstance(image_sequence, torch.Tensor):
+        total = len(image_sequence)
+        for i in range(0, total, batch_size):
+            # Process a chunk of frames on GPU/CPU together
+            # This amortizes the overhead of kernel launches and synchronization
+            batch = image_sequence[i:i+batch_size]
+            batch_np = tensor_to_numpy_uint8(batch)
+            for frame in batch_np:
+                yield np.ascontiguousarray(frame)
+    else:
+        # Fallback for list input (e.g. pingpong or mixed sources)
+        # We process individually as stacking might be expensive if they are not already contiguous tensors
+        for img in image_sequence:
+            yield np.ascontiguousarray(tensor_to_numpy_uint8(img))
+
 class DiscordSendSaveVideo:
     """
     A ComfyUI node that can send videos to Discord and save them with advanced options.
@@ -567,9 +595,9 @@ class DiscordSendSaveVideo:
                         env.update(video_format["environment"])
                     
                     # Convert tensor images to bytes
-                    # Optimization: Use tensor_to_numpy_uint8 for faster conversion
+                    # Optimization: Use process_batched_images to optimize GPU-CPU transfer
                     # Ensure contiguity to avoid ValueError in subprocess.stdin.write
-                    image_chunks = map(lambda x: np.ascontiguousarray(tensor_to_numpy_uint8(x)), image_sequence)
+                    image_chunks = process_batched_images(image_sequence)
                     
                     # Base ffmpeg arguments
                     args = [
@@ -625,9 +653,9 @@ class DiscordSendSaveVideo:
                 else:
                     i_pix_fmt = 'rgb24'
 
-                # Optimization: Use tensor_to_numpy_uint8 for faster conversion
+                # Optimization: Use process_batched_images to optimize GPU-CPU transfer
                 # Ensure contiguity to avoid ValueError in subprocess.stdin.write
-                image_chunks = map(lambda x: np.ascontiguousarray(tensor_to_numpy_uint8(x)), image_sequence)
+                image_chunks = process_batched_images(image_sequence)
                 
                 # Set up ffmpeg arguments based on format
                 loop_args = []
@@ -1090,4 +1118,4 @@ class DiscordSendSaveVideo:
                   save_cdn_urls=False, github_cdn_update=False, github_repo="", github_token="", 
                   github_file_path="cdn_urls.md", prompt=None, extra_pnginfo=None, unique_id=None, **format_properties):
         # Always return True to ensure execution and proper handling of dynamic format properties
-        return True 
+        return True
