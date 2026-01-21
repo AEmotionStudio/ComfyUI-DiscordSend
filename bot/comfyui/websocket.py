@@ -2,9 +2,16 @@ import aiohttp
 import logging
 import json
 import asyncio
+import random
 from typing import Callable, Coroutine, Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Reconnection constants
+INITIAL_BACKOFF = 1.0       # Initial delay in seconds
+MAX_BACKOFF = 60.0          # Maximum delay cap
+BACKOFF_MULTIPLIER = 2      # Exponential multiplier
+JITTER_FACTOR = 0.1         # +/- 10% randomization
 
 class ComfyUIWebSocket:
     """WebSocket Client for real-time ComfyUI events."""
@@ -27,25 +34,64 @@ class ComfyUIWebSocket:
         self._running = False
         self._listen_task: Optional[asyncio.Task] = None
 
-    async def connect(self):
-        """Connect to the WebSocket."""
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
+        # Reconnection state
+        self._reconnect_attempts = 0
+        self._should_reconnect = True
+        self._reconnect_task: Optional[asyncio.Task] = None
         
-        try:
-            self.ws = await self.session.ws_connect(self.ws_url)
-            self._running = True
-            self._listen_task = asyncio.create_task(self._listen())
-            logger.info(f"Connected to ComfyUI WebSocket at {self.ws_url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to WebSocket: {e}")
-            if self.session and not self.session.closed:
-                await self.session.close()
-            raise
+        # Lock to prevent race conditions between connect() and disconnect()
+        self._state_lock = asyncio.Lock()
+
+    async def connect(self) -> bool:
+        """Connect to the WebSocket.
+        
+        Returns:
+            True if connection was established successfully, False if aborted.
+        """
+        async with self._state_lock:
+            # Check if disconnect was called - don't proceed if so
+            if not self._should_reconnect:
+                logger.info("Connect aborted: disconnect was requested")
+                return False
+                
+            if self.session is None or self.session.closed:
+                self.session = aiohttp.ClientSession()
+
+            try:
+                self.ws = await self.session.ws_connect(self.ws_url)
+                # Re-check after await in case disconnect() was called during connection
+                if not self._should_reconnect:
+                    logger.info("Connect aborted after ws_connect: disconnect was requested")
+                    if self.ws and not self.ws.closed:
+                        await self.ws.close()
+                    if self.session and not self.session.closed:
+                        await self.session.close()
+                    return False
+                self._running = True
+                self._reconnect_attempts = 0  # Reset on successful connection
+                self._listen_task = asyncio.create_task(self._listen())
+                logger.info(f"Connected to ComfyUI WebSocket at {self.ws_url}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to connect to WebSocket: {e}")
+                if self.session and not self.session.closed:
+                    await self.session.close()
+                raise
 
     async def disconnect(self):
         """Disconnect from WebSocket."""
-        self._running = False
+        async with self._state_lock:
+            self._should_reconnect = False  # Prevent reconnection loop
+            self._running = False
+
+        # Cancel reconnection task if running (outside lock to avoid deadlock)
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except asyncio.CancelledError:
+                pass
+
         if self.ws:
             await self.ws.close()
         if self.session:
@@ -89,9 +135,71 @@ class ComfyUIWebSocket:
                     logger.error("WebSocket connection closed with error")
                     break
         except Exception as e:
-             if self._running:
-                 logger.error(f"WebSocket listener error: {e}")
-                 # Verify reconnection logic would handle this or let job manager handle it
+            if self._running:
+                logger.error(f"WebSocket listener error: {e}")
         finally:
-             if self._running:
-                 logger.info("WebSocket listener stopped unexpectedly.")
+            if self._running and self._should_reconnect:
+                logger.warning("WebSocket connection lost. Starting reconnection...")
+                self._reconnect_task = asyncio.create_task(self._handle_disconnect())
+
+    def _calculate_backoff(self) -> float:
+        """Calculate backoff delay with exponential growth and jitter."""
+        delay = INITIAL_BACKOFF * (BACKOFF_MULTIPLIER ** self._reconnect_attempts)
+        delay = min(delay, MAX_BACKOFF)
+        # Add jitter: +/- JITTER_FACTOR
+        jitter = delay * JITTER_FACTOR * (2 * random.random() - 1)
+        return delay + jitter
+
+    async def _handle_disconnect(self) -> None:
+        """Handle unexpected disconnection by attempting to reconnect."""
+        self._running = False
+
+        # Close existing connections
+        if self.ws and not self.ws.closed:
+            try:
+                await self.ws.close()
+            except Exception:
+                pass
+        if self.session and not self.session.closed:
+            try:
+                await self.session.close()
+            except Exception:
+                pass
+        self.session = None
+        self.ws = None
+
+        await self._reconnect_loop()
+
+    async def _reconnect_loop(self) -> None:
+        """Background task that handles reconnection with exponential backoff."""
+        while self._should_reconnect:
+            self._reconnect_attempts += 1
+            backoff = self._calculate_backoff()
+
+            logger.info(
+                f"Reconnection attempt {self._reconnect_attempts} "
+                f"in {backoff:.1f}s..."
+            )
+            await asyncio.sleep(backoff)
+
+            if not self._should_reconnect:
+                logger.info("Reconnection cancelled.")
+                return
+
+            try:
+                attempts_made = self._reconnect_attempts
+                connected = await self.connect()
+                if connected:
+                    logger.info(
+                        f"Successfully reconnected after "
+                        f"{attempts_made} attempt(s)."
+                    )
+                    return
+                else:
+                    # connect() returned False - disconnect was called
+                    logger.info("Reconnection aborted: disconnect was requested")
+                    return
+            except Exception as e:
+                logger.warning(f"Reconnection attempt failed: {e}")
+
+        logger.info("Reconnection loop ended (should_reconnect=False).")

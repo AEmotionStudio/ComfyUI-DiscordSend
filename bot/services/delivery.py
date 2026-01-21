@@ -2,11 +2,13 @@ import discord
 import io
 import json
 import logging
-from typing import List, Dict, Any, Union
+from typing import Any, Optional, Union
 
 from ..comfyui.client import ComfyUIClient
+from ..embeds.builders import EmbedBuilder
 
 logger = logging.getLogger(__name__)
+
 
 class DeliveryService:
     """Handles delivery of results to Discord."""
@@ -15,7 +17,69 @@ class DeliveryService:
         self.bot = bot
         self.client = comfy_client
 
-    async def deliver_job(self, job: Any): # job: Job model
+    async def _get_destination(
+        self, job: Any
+    ) -> Optional[Union[discord.User, discord.TextChannel]]:
+        """Get the destination channel or user for a job."""
+        if job.delivery_type == "dm":
+            try:
+                user = self.bot.get_user(int(job.user.discord_id))
+                if not user:
+                    user = await self.bot.fetch_user(int(job.user.discord_id))
+                return user
+            except Exception as e:
+                logger.error(f"Failed to fetch user for DM: {e}")
+                return None
+
+        if job.channel_id:
+            destination = self.bot.get_channel(int(job.channel_id))
+            if destination:
+                return destination
+            # Fallback to DM if channel not found
+            try:
+                user = self.bot.get_user(int(job.user.discord_id))
+                if not user:
+                    user = await self.bot.fetch_user(int(job.user.discord_id))
+                return user
+            except Exception:
+                pass
+
+        return None
+
+    async def deliver_error(self, job: Any, error_message: str) -> bool:
+        """
+        Deliver error notification for a failed job.
+
+        Args:
+            job: The failed Job model instance
+            error_message: The error message to display
+
+        Returns:
+            True if delivery succeeded, False otherwise
+        """
+        # Truncate error message if too long (Discord embed field limit)
+        if len(error_message) > 1000:
+            error_message = error_message[:997] + "..."
+
+        embed = EmbedBuilder.job_failed(job, error_message)
+
+        destination = await self._get_destination(job)
+
+        if destination:
+            try:
+                await destination.send(embed=embed)
+                logger.info(f"Delivered error for job {job.id} to {destination}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to deliver error: {e}")
+                return False
+        else:
+            logger.error(
+                f"Could not determine destination for error delivery (job {job.id})"
+            )
+            return False
+
+    async def deliver_job(self, job: Any):  # job: Job model
         """Deliver results for a completed job."""
         if not job.output_images:
             logger.warning(f"Job {job.id} completed but has no images.")
@@ -43,21 +107,7 @@ class DeliveryService:
             logger.warning("No files to upload.")
             return
 
-        # Determine destination
-        destination = None
-        
-        if job.delivery_type == "dm":
-            user = self.bot.get_user(int(job.user.discord_id)) or await self.bot.fetch_user(int(job.user.discord_id))
-            destination = user
-        elif job.channel_id:
-            destination = self.bot.get_channel(int(job.channel_id))
-            if not destination:
-                 # Fallback to DM if channel not found?
-                 try:
-                    user = self.bot.get_user(int(job.user.discord_id)) or await self.bot.fetch_user(int(job.user.discord_id))
-                    destination = user
-                 except:
-                     pass
+        destination = await self._get_destination(job)
 
         if destination:
             content = f"Generation complete for <@{job.user.discord_id}>!\n**Prompt:** {job.positive_prompt}"

@@ -2,16 +2,13 @@
 
 import os
 import json
-import time
 import numpy as np
 from PIL import Image
-import torch
 import folder_paths
 from PIL.PngImagePlugin import PngInfo
 from comfy.cli_args import args
 import re
 import cv2
-import requests
 from io import BytesIO
 from uuid import uuid4
 from typing import Any, Union, List, Optional
