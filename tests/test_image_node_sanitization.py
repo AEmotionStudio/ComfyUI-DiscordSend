@@ -43,12 +43,20 @@ except ImportError:
 
 from nodes.image_node import DiscordSendSaveImage
 
+# Check if torch is real or mocked
+try:
+    import torch
+    _torch_available = hasattr(torch, 'zeros') and callable(torch.zeros) and not isinstance(torch.zeros, MagicMock)
+except ImportError:
+    _torch_available = False
+
 class TestDiscordImageNodeOptimization(unittest.TestCase):
     def setUp(self):
         self.node = DiscordSendSaveImage()
         self.webhook_url = "https://discord.com/api/webhooks/12345/abcdef"
         self.github_token = "ghp_sensitive12345"
 
+    @unittest.skipUnless(_torch_available, "Test requires real torch for tensor iteration")
     def test_save_images_sanitization(self):
         # Create a mock image tensor using numpy (torch not available in CI)
         # The image_node iterates over images and accesses shape, so we need
