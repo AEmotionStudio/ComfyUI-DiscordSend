@@ -88,11 +88,11 @@ class DiscordSendSaveImage:
                 }),
                 "resize_to_power_of_2": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Resize images to nearest power of 2 dimensions (useful for textures in game engines)."
+                    "tooltip": "Resize images to nearest power of 2 dimensions (useful for game textures). Uses the algorithm selected in 'resize_method'."
                 }),
                 "resize_method": (["nearest-exact", "bilinear", "bicubic", "lanczos", "box"], {
                     "default": "lanczos", 
-                    "tooltip": "Resampling algorithm: 'lanczos' (best for photos), 'nearest-exact' (best for pixel art), 'bilinear'/'bicubic' (faster)."
+                    "tooltip": "Resampling algorithm used when 'resize_to_power_of_2' is enabled. 'lanczos' (best for photos), 'nearest-exact' (best for pixel art), 'bilinear'/'bicubic' (faster)."
                 }),
                 "send_to_discord": ("BOOLEAN", {
                     "default": False,
