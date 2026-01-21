@@ -3,7 +3,11 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Create a dummy torch module
+# IMPORTANT: Import real numpy FIRST before any mocking
+# This ensures test_power_of_two_math uses real numpy
+import numpy as np
+
+# Create a dummy torch module (torch is not installed in CI)
 mock_torch = MagicMock()
 sys.modules["torch"] = mock_torch
 sys.modules["folder_paths"] = MagicMock()

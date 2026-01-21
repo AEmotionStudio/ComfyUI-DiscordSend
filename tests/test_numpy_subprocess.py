@@ -1,8 +1,17 @@
 import unittest
-import numpy as np
 import subprocess
 import sys
 import os
+
+# Ensure we get real numpy, not a mock from other test files
+# Remove any mocked numpy before importing
+if 'numpy' in sys.modules and hasattr(sys.modules['numpy'], '_mock_name'):
+    del sys.modules['numpy']
+
+import numpy as np
+
+# Verify numpy is real
+assert hasattr(np, 'arange'), "numpy.arange not found - numpy may be mocked"
 
 class TestNumpyToSubprocess(unittest.TestCase):
     """
