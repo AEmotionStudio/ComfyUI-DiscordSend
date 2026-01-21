@@ -6,6 +6,7 @@
 ![Version](https://img.shields.io/badge/Version-1.1.0-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-GPLv3-red?style=for-the-badge)
 ![Dependencies](https://img.shields.io/badge/dependencies-1%20total-brightgreen?style=for-the-badge&color=blue)
+![Tests](https://img.shields.io/github/actions/workflow/status/AEmotionStudio/ComfyUI-DiscordSend/test.yml?style=for-the-badge&label=Tests)
 <br>
 ![Downloads](https://img.shields.io/badge/dynamic/json?color=blueviolet&label=Downloads&query=downloads.smart_count&url=https://raw.githubusercontent.com/AEmotionStudio/ComfyUI-DiscordSend/refs/heads/badges/traffic_stats.json&style=for-the-badge&logo=github)
 ![Visitors](https://img.shields.io/badge/dynamic/json?color=blue&label=Visitors&query=views.uniques&url=https://raw.githubusercontent.com/AEmotionStudio/ComfyUI-DiscordSend/refs/heads/badges/traffic_stats.json&style=for-the-badge&logo=github)
