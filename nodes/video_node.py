@@ -131,6 +131,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         cdn_inputs = BaseDiscordNode.get_cdn_input_types()
         filename_inputs = BaseDiscordNode.get_filename_input_types(add_date_default=True)
 
+        # Override tooltip for add_time to warn about Discord single-frame bug
+        filename_inputs["add_time"][1]["tooltip"] = "Add time (HH-MM-SS) to the filename. ⚠️ CRITICAL: Keep enabled for Discord videos to prevent single-frame playback issues!"
+
         # Determine format options and defaults based on ffmpeg availability
         if ffmpeg_path is None:
             print("ffmpeg not found. Video output will be limited or unavailable.")
