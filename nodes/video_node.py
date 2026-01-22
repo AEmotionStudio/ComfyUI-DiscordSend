@@ -89,7 +89,7 @@ def process_batched_images(image_sequence, batch_size=20):
         batch_size: Number of frames to process at once for Tensor inputs
 
     Yields:
-        Numpy array for each frame, contiguous and ready for ffmpeg
+        Numpy array for each batch or frame, contiguous and ready for ffmpeg
     """
     # Optimized path for Tensor input
     if isinstance(image_sequence, torch.Tensor):
@@ -99,8 +99,8 @@ def process_batched_images(image_sequence, batch_size=20):
             # This amortizes the overhead of kernel launches and synchronization
             batch = image_sequence[i:i+batch_size]
             batch_np = tensor_to_numpy_uint8(batch)
-            for frame in batch_np:
-                yield np.ascontiguousarray(frame)
+            # Yield the whole batch at once to optimize pipe writes
+            yield np.ascontiguousarray(batch_np)
     else:
         # Fallback for list input (e.g. pingpong or mixed sources)
         # We process individually as stacking might be expensive if they are not already contiguous tensors
@@ -538,7 +538,11 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         
                         # Feed frames to ffmpeg
                         for chunk in image_chunks:
-                            pbar.update(1)
+                            # Update pbar based on chunk size (it might be a batch)
+                            if len(chunk.shape) == 4: # (Batch, H, W, C)
+                                pbar.update(chunk.shape[0])
+                            else: # (H, W, C)
+                                pbar.update(1)
                             process.stdin.write(chunk)
                         
                         # Close stdin and get output
@@ -672,7 +676,11 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     
                     # Feed frames to ffmpeg
                     for chunk in image_chunks:
-                        pbar.update(1)
+                        # Update pbar based on chunk size (it might be a batch)
+                        if len(chunk.shape) == 4: # (Batch, H, W, C)
+                            pbar.update(chunk.shape[0])
+                        else: # (H, W, C)
+                            pbar.update(1)
                         process.stdin.write(chunk)
                     
                     # Close stdin and get output
