@@ -328,6 +328,10 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Process format string
         format_type, format_ext = format.split("/")
         
+        # Sanitize format_ext to prevent path traversal
+        # Allow only alphanumeric characters and hyphens
+        format_ext = re.sub(r'[^a-zA-Z0-9-]', '', format_ext)
+
         # Handle special format extensions
         if format == "video/h264-mp4" or format == "video/h265-mp4":
             format_ext = "mp4"

@@ -6,6 +6,7 @@ Provides FFmpeg-based video encoding with fallback to PIL for GIF/WebP.
 
 import os
 import subprocess
+import tempfile
 from typing import List, Tuple, Optional, Iterator, Any, Callable
 from uuid import uuid4
 import numpy as np
@@ -394,8 +395,17 @@ def optimize_video_for_discord(
         Path to the optimized file, or None if optimization failed
     """
     format_ext = os.path.splitext(input_file)[1].lstrip('.').lower()
-    discord_optimized_file = os.path.join(temp_dir, f"discord_optimized_{uuid4()}.{format_ext}")
 
+    # Use mkstemp for secure temporary file creation with restricted permissions (0600)
+    # This prevents race conditions and ensures other users can't read the temp file
+    fd, discord_optimized_file = tempfile.mkstemp(
+        suffix=f".{format_ext}",
+        prefix="discord_optimized_",
+        dir=temp_dir
+    )
+    os.close(fd) # Close file descriptor immediately so FFmpeg can write to it
+
+    success = False
     try:
         if format_ext == "mp4":
             optimize_args = [
@@ -436,6 +446,7 @@ def optimize_video_for_discord(
 
         if result.returncode == 0 and os.path.exists(discord_optimized_file):
             print(f"Discord-optimized file created: {discord_optimized_file}")
+            success = True
             return discord_optimized_file
         else:
             print(f"Optimization failed: {result.stderr}")
@@ -444,6 +455,14 @@ def optimize_video_for_discord(
     except Exception as e:
         print(f"Error during Discord optimization: {e}")
         return None
+
+    finally:
+        # Clean up temp file if optimization failed or wasn't supported
+        if not success and os.path.exists(discord_optimized_file):
+            try:
+                os.remove(discord_optimized_file)
+            except Exception:
+                pass
 
 
 def mux_audio_to_video(
