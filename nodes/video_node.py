@@ -178,7 +178,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
             "required": {
                 "images": ("IMAGE", {"tooltip": "The image sequence to save as video and/or send to Discord."}),
                 "filename_prefix": ("STRING", {"default": "ComfyUI-Video", "tooltip": "The prefix for the saved files."}),
-                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last video instead of creating incrementing filenames."})
+                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "⚠️ CAUTION: If enabled, new saves will REPLACE the previous file with the same name. Useful for iterative testing, dangerous for batch production."})
             },
             "optional": {
                 # Video format settings
