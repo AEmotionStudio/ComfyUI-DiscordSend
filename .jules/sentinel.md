@@ -22,3 +22,8 @@
 **Vulnerability:** The video node created temporary copies of videos (`discord_optimized_*`) to ensure Discord compatibility but failed to delete them. In long-running environments, this could fill the disk storage, leading to a Denial of Service (DoS).
 **Learning:** Temporary files created for specific operations (like upload optimization) must be explicitly managed and cleaned up, regardless of success or failure of the operation. Relying on OS or application-level temp directory cleaning is insufficient for large media files.
 **Prevention:** Use `try...finally` blocks to guarantee cleanup of temporary resources. Explicitly track created temporary artifacts and verify their deletion.
+
+## 2026-01-23 - Symlink Overwrite in Custom Nodes
+**Vulnerability:** Custom nodes (`DiscordSendSaveVideo`, `DiscordSendSaveImage`) overwrote existing files when `overwrite_last` was enabled. If the target file was a symlink, the overwrite followed the link, allowing arbitrary file overwrites.
+**Learning:** Simply calculating an output path and opening it for writing is unsafe if the directory is shared or accessible by others. Tools like `subprocess.Popen` or libraries like `PIL.Image.save` will follow symlinks blindly.
+**Prevention:** Explicitly check `os.path.islink(path)` before writing to any file path. Raise an error if a symlink is detected, especially in contexts where file overwrites are expected.
