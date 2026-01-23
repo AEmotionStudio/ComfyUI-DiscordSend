@@ -524,6 +524,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     file = f"{filename}_{counter:05}.{video_format['extension']}"
                     file_path = os.path.join(full_output_folder, file)
                     
+                    # Security: Validate output path to prevent symlink overwrites
+                    validate_path_is_safe(file_path)
+
                     # Set up environment
                     env = os.environ.copy()
                     if "environment" in video_format:
