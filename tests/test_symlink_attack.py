@@ -144,6 +144,61 @@ class TestSymlinkAttack(unittest.TestCase):
                         )
                         print("SUCCESS: Parent directory symlink prevented.")
 
+    def test_non_existent_directory_symlink_bypass(self):
+        """Test where intermediate directory doesn't exist but parent is symlink."""
+        # /test_dir/secret
+        secret_dir = os.path.join(self.test_dir, "secret")
+        os.makedirs(secret_dir)
+
+        # /test_dir/output/link -> /test_dir/secret
+        link_dir = os.path.join(self.output_dir, "link")
+        os.symlink(secret_dir, link_dir)
+
+        # Target: /test_dir/output/link/subdir/file.mp4
+        # 'subdir' does not exist yet.
+        target_dir = os.path.join(link_dir, "subdir")
+        # Do NOT create target_dir.
+
+        # Patch folder_paths to return the non-existent target_dir
+        with patch('nodes.video_node.folder_paths') as mock_folder_paths:
+            mock_folder_paths.get_save_image_path.return_value = (
+                target_dir,
+                "ComfyUI-Video",
+                1,
+                "",
+                "ComfyUI-Video"
+            )
+
+            # Use os.makedirs real implementation to create the directory if the node calls it
+            # But here we assume the validation happens before directory creation or during path validation
+
+            mock_images = [MagicMock()]
+            mock_images[0].shape = (64, 64, 3)
+
+            with patch('nodes.video_node.tensor_to_numpy_uint8') as mock_t2n:
+                import numpy as np
+                mock_t2n.return_value = np.zeros((64, 64, 3), dtype=np.uint8)
+
+                with patch('nodes.video_node.ffmpeg_path', "ffmpeg"):
+                    with patch('subprocess.Popen') as mock_popen:
+
+                        with self.assertRaises(ValueError) as context:
+                            self.node.save_video(
+                                images=mock_images,
+                                overwrite_last=True,
+                                format="video/h264-mp4",
+                                save_output=True,
+                                frame_rate=1.0
+                            )
+
+                        error_msg = str(context.exception)
+                        self.assertTrue(
+                            "Symlinks in output paths are not allowed" in error_msg or
+                            "Path component" in error_msg and "is a symlink" in error_msg,
+                            f"Unexpected error message: {error_msg}"
+                        )
+                        print("SUCCESS: Non-existent directory symlink bypass prevented.")
+
     def test_vhs_format_bypass(self):
         """Test that VHS format path recalculation is also validated."""
         # This test tries to exploit the path where 'is_vhs_format' is True
@@ -177,17 +232,6 @@ class TestSymlinkAttack(unittest.TestCase):
                     # Mock has_vhs_formats to be True
                     with patch('nodes.video_node.has_vhs_formats', True):
                          with patch('subprocess.Popen') as mock_popen:
-
-                            # We need to trigger the VHS path.
-                            # The code checks: is_vhs_format = has_vhs_formats and format not in ["video/mp4", "video/webm", "video/gif"]
-                            # So pass a custom format string "video/mkv" (which splits to type=video, ext=mkv)
-                            # The code then does: vhs_format_name = format.split("/")[-1] -> "mkv"
-
-                            # We need to ensure basic_formats.get("mkv") returns something or we hit exception
-                            # But wait, the code defines basic_formats inside the method.
-                            # And it only has mp4, webm, gif keys.
-                            # So "mkv" will use default empty dict.
-                            # extension becomes "mkv".
 
                             with self.assertRaises(ValueError) as context:
                                 self.node.save_video(
