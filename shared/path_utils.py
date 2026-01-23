@@ -81,3 +81,22 @@ def get_unique_filepath(
         full_filename = f"{filename}{extension}"
 
     return os.path.join(directory, full_filename)
+
+
+def validate_path_is_safe(path: str) -> None:
+    """
+    Validate that a path is safe to write to.
+
+    Checks:
+    - Path is not a symlink (to prevent overwriting targets)
+
+    Args:
+        path: File path to validate
+
+    Raises:
+        ValueError: If path is unsafe
+    """
+    # Check if path exists and is a symlink
+    # We use os.path.islink directly which checks if the leaf entry is a symlink
+    if os.path.islink(path):
+        raise ValueError(f"Security error: Output path '{path}' is a symlink. Overwriting symlinks is not allowed.")

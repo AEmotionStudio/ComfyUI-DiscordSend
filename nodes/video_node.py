@@ -24,7 +24,8 @@ import server
 # Import shared utilities
 from shared import (
     tensor_to_numpy_uint8,
-    build_metadata_section
+    build_metadata_section,
+    validate_path_is_safe
 )
 # Add BaseDiscordNode import
 from .base_node import BaseDiscordNode
@@ -321,6 +322,10 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Save first frame as PNG to keep metadata
         first_image_file = f"{filename}_{counter:05}.png"
         first_image_path = os.path.join(full_output_folder, first_image_file)
+
+        # Security: Validate output path to prevent symlink overwrites
+        validate_path_is_safe(first_image_path)
+
         Image.fromarray(tensor_to_numpy_uint8(first_image)).save(
             first_image_path,
             pnginfo=metadata,
@@ -360,6 +365,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         file = f"{filename}_{counter:05}.{format_ext}"
         file_path = os.path.join(full_output_folder, file)
         
+        # Security: Validate output path to prevent symlink overwrites
+        validate_path_is_safe(file_path)
+
         # Check if we need ffmpeg (for video formats) or can use PIL (for image formats)
         use_pil = format_type == "image" or ffmpeg_path is None
         
@@ -717,6 +725,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         output_file_with_audio = f"{filename}_{counter:05}-audio.{extension}"
                         output_file_with_audio_path = os.path.join(full_output_folder, output_file_with_audio)
                         
+                        # Security: Validate output path to prevent symlink overwrites
+                        validate_path_is_safe(output_file_with_audio_path)
+
                         # Set up audio encoding parameters
                         channels = a_waveform.size(1)
                         sample_rate = audio.get('sample_rate', 44100)

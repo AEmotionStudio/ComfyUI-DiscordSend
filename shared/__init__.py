@@ -32,7 +32,7 @@ from .media.image_processing import tensor_to_numpy_uint8
 from .github_integration import update_github_cdn_urls
 from .logging_config import setup_logging, get_logger
 from .filename_utils import build_filename_with_metadata, get_timestamp_string
-from .path_utils import get_output_directory, ensure_directory_exists
+from .path_utils import get_output_directory, ensure_directory_exists, validate_path_is_safe
 
 __all__ = [
     # Workflow utilities
@@ -65,4 +65,5 @@ __all__ = [
     # Path utilities
     'get_output_directory',
     'ensure_directory_exists',
+    'validate_path_is_safe',
 ]

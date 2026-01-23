@@ -16,7 +16,8 @@ from typing import Any, Union, List, Optional
 # Import shared utilities
 from shared import (
     sanitize_token_from_text,
-    tensor_to_numpy_uint8
+    tensor_to_numpy_uint8,
+    validate_path_is_safe
 )
 
 
@@ -350,6 +351,9 @@ class DiscordSendSaveImage(BaseDiscordNode):
                 
             filepath = os.path.join(full_output_folder, file)
             
+            # Security: Validate output path to prevent symlink overwrites
+            validate_path_is_safe(filepath)
+
             try:
                 # Save the image based on format
                 if file_format == "png":
