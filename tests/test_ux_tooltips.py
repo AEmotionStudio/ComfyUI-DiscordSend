@@ -43,5 +43,36 @@ class TestUXTooltips(unittest.TestCase):
         expected = "Add time (HH-MM-SS) to the filename."
         self.assertEqual(tooltip, expected)
 
+    def test_github_token_tooltip(self):
+        """Test that the github_token tooltip contains helpful instructions."""
+        # Both nodes inherit from BaseDiscordNode, so check one
+        input_types = DiscordSendSaveImage.INPUT_TYPES()
+        token_config = input_types["optional"]["github_token"]
+        tooltip = token_config[1]["tooltip"]
+
+        self.assertIn("Settings > Developer settings > Tokens", tooltip)
+        self.assertIn("Requires 'repo' scope", tooltip)
+
+    def test_resize_method_clarity(self):
+        """Test that resize_method tooltip clarifies dependency on resize_to_power_of_2."""
+        input_types = DiscordSendSaveImage.INPUT_TYPES()
+        resize_config = input_types["optional"]["resize_method"]
+        tooltip = resize_config[1]["tooltip"]
+
+        self.assertIn("ONLY when 'resize_to_power_of_2' is enabled", tooltip)
+        self.assertIn("Ignored otherwise", tooltip)
+        self.assertIn("lanczos: Best for photos", tooltip)
+
+    def test_overwrite_safety_warning(self):
+        """Test that overwrite_last tooltip contains safety warning in both nodes."""
+        for NodeClass in [DiscordSendSaveImage, DiscordSendSaveVideo]:
+            input_types = NodeClass.INPUT_TYPES()
+            overwrite_config = input_types["required"]["overwrite_last"]
+            tooltip = overwrite_config[1]["tooltip"]
+
+            self.assertIn("CAUTION", tooltip)
+            self.assertIn("REPLACE the previous file", tooltip)
+            self.assertIn("dangerous for batch production", tooltip)
+
 if __name__ == "__main__":
     unittest.main()

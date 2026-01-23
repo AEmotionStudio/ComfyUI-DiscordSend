@@ -94,7 +94,7 @@ class BaseDiscordNode:
             "github_token": ("STRING", {
                 "default": "",
                 "multiline": False,
-                "tooltip": "GitHub personal access token with repo write permissions."
+                "tooltip": "GitHub Personal Access Token (PAT). Generate at: Settings > Developer settings > Tokens. \n⚠️ Requires 'repo' scope (or 'public_repo') to upload files."
             }),
             "github_file_path": ("STRING", {
                 "default": "cdn_urls.md",

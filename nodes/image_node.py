@@ -48,7 +48,7 @@ class DiscordSendSaveImage(BaseDiscordNode):
             "required": {
                 "images": ("IMAGE", {"tooltip": "The images to save and/or send to Discord."}),
                 "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder for batch indexing."}),
-                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "If enabled, will overwrite the last image instead of creating incrementing filenames."})
+                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "⚠️ CAUTION: If enabled, new saves will REPLACE the previous file with the same name. Useful for iterative testing, dangerous for batch production."})
             },
             "optional": {
                 "file_format": (["png", "jpeg", "webp"], {
@@ -80,7 +80,7 @@ class DiscordSendSaveImage(BaseDiscordNode):
                 }),
                 "resize_method": (["nearest-exact", "bilinear", "bicubic", "lanczos", "box"], {
                     "default": "lanczos", 
-                    "tooltip": "Resampling algorithm used when 'resize_to_power_of_2' is enabled. 'lanczos' (best for photos), 'nearest-exact' (best for pixel art), 'bilinear'/'bicubic' (faster)."
+                    "tooltip": "Resampling algorithm used ONLY when 'resize_to_power_of_2' is enabled. Ignored otherwise. \n• lanczos: Best for photos\n• nearest-exact: Best for pixel art\n• bilinear/bicubic: Faster"
                 }),
                 "include_format_in_message": ("BOOLEAN", {
                     "default": False,
