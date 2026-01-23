@@ -369,9 +369,17 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                 print(f"Using PIL for {format} creation")
                 # Convert tensor images to PIL images
                 pil_images = []
-                for img in image_sequence:
-                    img_np = tensor_to_numpy_uint8(img)
-                    pil_images.append(Image.fromarray(img_np))
+
+                # Optimization: Use process_batched_images to optimize GPU-CPU transfer
+                # This works for both Tensor (batched transfer) and list (individual transfer) inputs
+                for chunk in process_batched_images(image_sequence):
+                    if len(chunk.shape) == 4:
+                        # Batched chunk (B, H, W, C)
+                        for i in range(chunk.shape[0]):
+                            pil_images.append(Image.fromarray(chunk[i]))
+                    else:
+                        # Single frame chunk (H, W, C)
+                        pil_images.append(Image.fromarray(chunk))
                 
                 if len(pil_images) > 0:
                     if format_ext == "gif":
