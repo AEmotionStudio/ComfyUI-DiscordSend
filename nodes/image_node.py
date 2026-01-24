@@ -49,7 +49,7 @@ class DiscordSendSaveImage(BaseDiscordNode):
             "required": {
                 "images": ("IMAGE", {"tooltip": "The images to save and/or send to Discord."}),
                 "filename_prefix": ("STRING", {"default": "ComfyUI-Image", "tooltip": "The prefix for the saved files. Supports %batch_num% placeholder for batch indexing."}),
-                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "⚠️ CAUTION: If enabled, new saves will REPLACE the previous file with the same name. Useful for iterative testing, dangerous for batch production."})
+                "overwrite_last": ("BOOLEAN", {"default": False, "tooltip": "⚠️ CAUTION: If enabled, new saves will REPLACE the previous file with the same name. Useful for iterative testing, dangerous for batch production. Note: You must also disable 'add_time' and 'add_date' to ensure filenames are identical."})
             },
             "optional": {
                 "file_format": (["png", "jpeg", "webp"], {
