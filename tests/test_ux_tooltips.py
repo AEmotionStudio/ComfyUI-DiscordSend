@@ -65,14 +65,23 @@ class TestUXTooltips(unittest.TestCase):
 
     def test_overwrite_safety_warning(self):
         """Test that overwrite_last tooltip contains safety warning in both nodes."""
-        for NodeClass in [DiscordSendSaveImage, DiscordSendSaveVideo]:
-            input_types = NodeClass.INPUT_TYPES()
-            overwrite_config = input_types["required"]["overwrite_last"]
-            tooltip = overwrite_config[1]["tooltip"]
+        # Test Image Node
+        input_types_img = DiscordSendSaveImage.INPUT_TYPES()
+        tooltip_img = input_types_img["required"]["overwrite_last"][1]["tooltip"]
 
-            self.assertIn("CAUTION", tooltip)
-            self.assertIn("REPLACE the previous file", tooltip)
-            self.assertIn("dangerous for batch production", tooltip)
+        self.assertIn("CAUTION", tooltip_img)
+        self.assertIn("REPLACE the previous file", tooltip_img)
+        self.assertIn("dangerous for batch production", tooltip_img)
+        self.assertIn("disable 'add_time' and 'add_date'", tooltip_img)
+
+        # Test Video Node
+        input_types_vid = DiscordSendSaveVideo.INPUT_TYPES()
+        tooltip_vid = input_types_vid["required"]["overwrite_last"][1]["tooltip"]
+
+        self.assertIn("CAUTION", tooltip_vid)
+        self.assertIn("REPLACE the previous file", tooltip_vid)
+        self.assertIn("dangerous for batch production", tooltip_vid)
+        self.assertIn("Disabling 'add_time' to overwrite files will cause single-frame playback issues", tooltip_vid)
 
 if __name__ == "__main__":
     unittest.main()
