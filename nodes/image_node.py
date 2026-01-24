@@ -16,7 +16,7 @@ from typing import Any, Union, List, Optional
 # Import shared utilities
 from shared import (
     sanitize_token_from_text,
-    tensor_to_numpy_uint8,
+    process_batched_images,
     validate_path_is_safe
 )
 
@@ -267,209 +267,218 @@ class DiscordSendSaveImage(BaseDiscordNode):
                 for x in extra_pnginfo:
                     metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
-        for batch_number, image in enumerate(images):
-            # Convert the tensor to a PIL image
-            i = tensor_to_numpy_uint8(image)
-            img = Image.fromarray(i)
+        batch_counter = 0
+        for chunk in process_batched_images(images):
+            if len(chunk.shape) == 4:
+                chunk_images = [chunk[i] for i in range(chunk.shape[0])]
+            else:
+                chunk_images = [chunk]
+
+            for image_np in chunk_images:
+                batch_number = batch_counter
+                batch_counter += 1
+                # Convert the tensor to a PIL image
+                i = image_np
+                img = Image.fromarray(i)
             
-            # Track if resizing happened to optimize Discord encoding later
-            was_resized = False
-            orig_width, orig_height = img.size
+                # Track if resizing happened to optimize Discord encoding later
+                was_resized = False
+                orig_width, orig_height = img.size
             
-            # Resize to power of 2 if enabled
-            if resize_to_power_of_2:
-                new_width = 2 ** int(np.log2(orig_width) + 0.5)
-                new_height = 2 ** int(np.log2(orig_height) + 0.5)
+                # Resize to power of 2 if enabled
+                if resize_to_power_of_2:
+                    new_width = 2 ** int(np.log2(orig_width) + 0.5)
+                    new_height = 2 ** int(np.log2(orig_height) + 0.5)
                 
-                print(f"Resizing image from {orig_width}x{orig_height} to {new_width}x{new_height} (power of 2)")
+                    print(f"Resizing image from {orig_width}x{orig_height} to {new_width}x{new_height} (power of 2)")
                 
+                    if send_to_discord and webhook_url and batch_number == 0:
+                        image_info["original_dimensions"] = f"{orig_width}x{orig_height}"
+                        image_info["resized_dimensions"] = f"{new_width}x{new_height}"
+                
+                    if (new_width != orig_width or new_height != orig_height):
+                        try:
+                            img = img.resize((new_width, new_height), selected_resize_method)
+                            was_resized = True
+                            print(f"Successfully resized using {resize_method} method")
+                        except Exception as e:
+                            print(f"Error during power of 2 resize: {e}")
+                            img = img.resize((new_width, new_height), Image.BICUBIC)
+                            was_resized = True
+                            print("Fallback to BICUBIC resize method due to error")
+            
+                # Get dimensions
+                width, height = img.size
+            
+                # Add dimensions to filename if enabled
+                dimensions_suffix = ""
+                if add_dimensions:
+                    dimensions_suffix = f"_{width}x{height}"
+                    filename_prefix += dimensions_suffix
+                
+                    if send_to_discord and webhook_url and batch_number == 0:
+                        image_info["dimensions"] = f"{width}x{height}"
+            
+                # Add image information to Discord message if this is the first image
                 if send_to_discord and webhook_url and batch_number == 0:
-                    image_info["original_dimensions"] = f"{orig_width}x{orig_height}"
-                    image_info["resized_dimensions"] = f"{new_width}x{new_height}"
+                    if "message_prefix" in image_info:
+                        info_message = image_info["message_prefix"]
+                        has_resize_dimensions = "original_dimensions" in image_info and "resized_dimensions" in image_info
+                        has_dimensions = "dimensions" in image_info
+
+                        if (has_resize_dimensions or has_dimensions) and not info_message:
+                            info_message = "\n\n**Image Information:**\n"
+
+                        if has_resize_dimensions:
+                            info_message += f"**Original Dimensions:** {image_info['original_dimensions']}\n"
+                            info_message += f"**Resized Dimensions:** {image_info['resized_dimensions']} (Power of 2)\n"
+                        elif has_dimensions:
+                            info_message += f"**Dimensions:** {image_info['dimensions']}\n"
+
+                        if info_message:
+                            discord_message += info_message
+                            print("Added image information to Discord message")
                 
-                if (new_width != orig_width or new_height != orig_height):
-                    try:
-                        img = img.resize((new_width, new_height), selected_resize_method)
-                        was_resized = True
-                        print(f"Successfully resized using {resize_method} method")
-                    except Exception as e:
-                        print(f"Error during power of 2 resize: {e}")
-                        img = img.resize((new_width, new_height), Image.BICUBIC)
-                        was_resized = True
-                        print("Fallback to BICUBIC resize method due to error")
+                    if "prompt_message" in image_info:
+                        discord_message += image_info["prompt_message"]
+                        print("Added prompts to Discord message after image information")
             
-            # Get dimensions
-            width, height = img.size
+                # For Discord output
+                filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
             
-            # Add dimensions to filename if enabled
-            dimensions_suffix = ""
-            if add_dimensions:
-                dimensions_suffix = f"_{width}x{height}"
-                filename_prefix += dimensions_suffix
+                # Add dimensions tag before the counter if enabled
+                if add_dimensions and dimensions_suffix not in filename_with_batch_num:
+                    base_name = os.path.splitext(filename_with_batch_num)[0]
+                    filename_with_batch_num = f"{base_name}{dimensions_suffix}"
+            
+                # File extension based on format
+                extension = f".{file_format}"
+                file = f"{filename_with_batch_num}_{counter:05}_{extension}"
+            
+                if file.endswith(f"_{extension}"):
+                    file = file[:-len(f"_{extension}")] + extension
                 
-                if send_to_discord and webhook_url and batch_number == 0:
-                    image_info["dimensions"] = f"{width}x{height}"
+                filepath = os.path.join(full_output_folder, file)
             
-            # Add image information to Discord message if this is the first image
-            if send_to_discord and webhook_url and batch_number == 0:
-                if "message_prefix" in image_info:
-                    info_message = image_info["message_prefix"]
-                    has_resize_dimensions = "original_dimensions" in image_info and "resized_dimensions" in image_info
-                    has_dimensions = "dimensions" in image_info
+                # Security: Validate output path to prevent symlink overwrites
+                validate_path_is_safe(filepath)
 
-                    if (has_resize_dimensions or has_dimensions) and not info_message:
-                        info_message = "\n\n**Image Information:**\n"
-
-                    if has_resize_dimensions:
-                        info_message += f"**Original Dimensions:** {image_info['original_dimensions']}\n"
-                        info_message += f"**Resized Dimensions:** {image_info['resized_dimensions']} (Power of 2)\n"
-                    elif has_dimensions:
-                        info_message += f"**Dimensions:** {image_info['dimensions']}\n"
-
-                    if info_message:
-                        discord_message += info_message
-                        print("Added image information to Discord message")
-                
-                if "prompt_message" in image_info:
-                    discord_message += image_info["prompt_message"]
-                    print("Added prompts to Discord message after image information")
-            
-            # For Discord output
-            filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-            
-            # Add dimensions tag before the counter if enabled
-            if add_dimensions and dimensions_suffix not in filename_with_batch_num:
-                base_name = os.path.splitext(filename_with_batch_num)[0]
-                filename_with_batch_num = f"{base_name}{dimensions_suffix}"
-            
-            # File extension based on format
-            extension = f".{file_format}"
-            file = f"{filename_with_batch_num}_{counter:05}_{extension}"
-            
-            if file.endswith(f"_{extension}"):
-                file = file[:-len(f"_{extension}")] + extension
-                
-            filepath = os.path.join(full_output_folder, file)
-            
-            # Security: Validate output path to prevent symlink overwrites
-            validate_path_is_safe(filepath)
-
-            try:
-                # Save the image based on format
-                if file_format == "png":
-                    img.save(filepath, pnginfo=metadata, compress_level=self.compress_level)
-                elif file_format == "jpeg":
-                    jpeg_quality = 100 if lossless else quality
-                    img.save(filepath, format="JPEG", quality=jpeg_quality)
-                elif file_format == "webp":
-                    if lossless:
-                        img.save(filepath, format="WEBP", lossless=True)
-                    else:
-                        img.save(filepath, format="WEBP", quality=quality)
-                
-                output_files.append(filepath)
-                
-                print(f"Saved image with dimensions: {img.size[0]}x{img.size[1]}")
-                    
-                results.append({
-                    "filename": file,
-                    "subfolder": "discord_output/" + (subfolder if subfolder else "") if save_output else "",
-                    "type": "output" if save_output else "temp",
-                    "path": filepath
-                })
-                
-                # Send to Discord if enabled
-                if send_to_discord and webhook_url:
-                    try:
-                        discord_filename = f"{uuid4()}.{file_format}"
-                        file_bytes = BytesIO()
-
-                        if file_format == "jpeg":
-                            save_img = img
-                            if save_img.mode == 'RGBA':
-                                save_img = save_img.convert('RGB')
-                            jpeg_quality = 100 if lossless else quality
-                            save_img.save(file_bytes, format="JPEG", quality=jpeg_quality)
-                            file_bytes.seek(0)
-
-                        elif file_format == "png":
-                            if not was_resized:
-                                img_cv = i
-                            else:
-                                img_cv = np.array(img)
-
-                            if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
-                                img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
-                            if len(img_cv.shape) == 2:
-                                img_cv = cv2.cvtColor(img_cv, cv2.COLOR_GRAY2BGR)
-                            elif len(img_cv.shape) == 3 and img_cv.shape[2] == 4:
-                                img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGBA2BGRA)
-
-                            _, buffer = cv2.imencode('.png', img_cv)
-                            file_bytes = BytesIO(buffer)
-
-                        elif file_format == "webp":
-                            try:
-                                if lossless:
-                                    img.save(file_bytes, format="WEBP", lossless=True)
-                                else:
-                                    img.save(file_bytes, format="WEBP", quality=quality)
-                                file_bytes.seek(0)
-                            except Exception as e:
-                                print(f"Error with WebP encoding for Discord: {e}, falling back to PNG")
-                                discord_filename = f"{os.path.splitext(discord_filename)[0]}.png"
-                                file_bytes = BytesIO() # Reset buffer
-                                img.save(file_bytes, format="PNG", compress_level=self.compress_level)
-                                file_bytes.seek(0)
-                        
-                        if group_batched_images:
-                            batch_discord_files.append((discord_filename, file_bytes.getvalue()))
-                            
-                            # Prepare workflow JSON only once for the whole batch
-                            if batch_number == 0 and send_workflow_json and (prompt is not None or extra_pnginfo is not None):
-                                wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
-                                if wflow:
-                                    batch_workflow_json = wflow
-                            
-                            if batch_number == 0 and discord_message:
-                                batch_discord_data["content"] = discord_message
-                            
+                try:
+                    # Save the image based on format
+                    if file_format == "png":
+                        img.save(filepath, pnginfo=metadata, compress_level=self.compress_level)
+                    elif file_format == "jpeg":
+                        jpeg_quality = 100 if lossless else quality
+                        img.save(filepath, format="JPEG", quality=jpeg_quality)
+                    elif file_format == "webp":
+                        if lossless:
+                            img.save(filepath, format="WEBP", lossless=True)
                         else:
-                            # Immediate send
-                            files = {
-                                "file": (discord_filename, file_bytes.getvalue())
-                            }
-                            
-                            if send_workflow_json and (prompt is not None or extra_pnginfo is not None):
-                                wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
-                                if wflow:
-                                    json_filename = f"{os.path.splitext(discord_filename)[0]}.json"
-                                    files["workflow"] = (json_filename, json.dumps(wflow, indent=2).encode('utf-8'))
-                            
-                            data = {}
-                            if discord_message:
-                                data["content"] = discord_message
-                            
-                            success, response, new_urls = self.send_discord_files(webhook_url, files, data, save_cdn_urls)
-                            
-                            if success:
-                                print(f"Successfully sent image {batch_number+1} to Discord")
-                                discord_sent_files.append(discord_filename)
-                                if new_urls:
-                                    batch_cdn_urls.extend(new_urls)
-                                    self.send_cdn_urls_to_discord(webhook_url, new_urls, "Discord CDN URLs for the uploaded images:")
-                            else:
-                                print(f"Error: Discord returned status code {response.status_code}")
-                                discord_send_success = False
-
-                    except Exception as e:
-                        print(f"Error processing image for Discord: {e}")
-                        discord_send_success = False
+                            img.save(filepath, format="WEBP", quality=quality)
                 
-                if not overwrite_last:
-                    counter += 1
-            except Exception as e:
-                print(f"Error saving image: {e}")
+                    output_files.append(filepath)
+                
+                    print(f"Saved image with dimensions: {img.size[0]}x{img.size[1]}")
+                    
+                    results.append({
+                        "filename": file,
+                        "subfolder": "discord_output/" + (subfolder if subfolder else "") if save_output else "",
+                        "type": "output" if save_output else "temp",
+                        "path": filepath
+                    })
+                
+                    # Send to Discord if enabled
+                    if send_to_discord and webhook_url:
+                        try:
+                            discord_filename = f"{uuid4()}.{file_format}"
+                            file_bytes = BytesIO()
+
+                            if file_format == "jpeg":
+                                save_img = img
+                                if save_img.mode == 'RGBA':
+                                    save_img = save_img.convert('RGB')
+                                jpeg_quality = 100 if lossless else quality
+                                save_img.save(file_bytes, format="JPEG", quality=jpeg_quality)
+                                file_bytes.seek(0)
+
+                            elif file_format == "png":
+                                if not was_resized:
+                                    img_cv = i
+                                else:
+                                    img_cv = np.array(img)
+
+                                if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
+                                    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+                                if len(img_cv.shape) == 2:
+                                    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_GRAY2BGR)
+                                elif len(img_cv.shape) == 3 and img_cv.shape[2] == 4:
+                                    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGBA2BGRA)
+
+                                _, buffer = cv2.imencode('.png', img_cv)
+                                file_bytes = BytesIO(buffer)
+
+                            elif file_format == "webp":
+                                try:
+                                    if lossless:
+                                        img.save(file_bytes, format="WEBP", lossless=True)
+                                    else:
+                                        img.save(file_bytes, format="WEBP", quality=quality)
+                                    file_bytes.seek(0)
+                                except Exception as e:
+                                    print(f"Error with WebP encoding for Discord: {e}, falling back to PNG")
+                                    discord_filename = f"{os.path.splitext(discord_filename)[0]}.png"
+                                    file_bytes = BytesIO() # Reset buffer
+                                    img.save(file_bytes, format="PNG", compress_level=self.compress_level)
+                                    file_bytes.seek(0)
+                        
+                            if group_batched_images:
+                                batch_discord_files.append((discord_filename, file_bytes.getvalue()))
+                            
+                                # Prepare workflow JSON only once for the whole batch
+                                if batch_number == 0 and send_workflow_json and (prompt is not None or extra_pnginfo is not None):
+                                    wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
+                                    if wflow:
+                                        batch_workflow_json = wflow
+                            
+                                if batch_number == 0 and discord_message:
+                                    batch_discord_data["content"] = discord_message
+                            
+                            else:
+                                # Immediate send
+                                files = {
+                                    "file": (discord_filename, file_bytes.getvalue())
+                                }
+                            
+                                if send_workflow_json and (prompt is not None or extra_pnginfo is not None):
+                                    wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
+                                    if wflow:
+                                        json_filename = f"{os.path.splitext(discord_filename)[0]}.json"
+                                        files["workflow"] = (json_filename, json.dumps(wflow, indent=2).encode('utf-8'))
+                            
+                                data = {}
+                                if discord_message:
+                                    data["content"] = discord_message
+                            
+                                success, response, new_urls = self.send_discord_files(webhook_url, files, data, save_cdn_urls)
+                            
+                                if success:
+                                    print(f"Successfully sent image {batch_number+1} to Discord")
+                                    discord_sent_files.append(discord_filename)
+                                    if new_urls:
+                                        batch_cdn_urls.extend(new_urls)
+                                        self.send_cdn_urls_to_discord(webhook_url, new_urls, "Discord CDN URLs for the uploaded images:")
+                                else:
+                                    print(f"Error: Discord returned status code {response.status_code}")
+                                    discord_send_success = False
+
+                        except Exception as e:
+                            print(f"Error processing image for Discord: {e}")
+                            discord_send_success = False
+                
+                    if not overwrite_last:
+                        counter += 1
+                except Exception as e:
+                    print(f"Error saving image: {e}")
         
         if results:
             if save_output:
