@@ -16,7 +16,6 @@ from typing import Any, Union, List, Optional
 # Import shared utilities
 from shared import (
     sanitize_token_from_text,
-    tensor_to_numpy_uint8,
     process_batched_images,
     validate_path_is_safe
 )
