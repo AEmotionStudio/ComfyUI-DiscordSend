@@ -23,11 +23,28 @@ sys.modules["PIL.Image"] = mock_pil
 sys.modules["PIL.PngImagePlugin"] = MagicMock()
 sys.modules["cv2"] = MagicMock()
 
-# Mock shared modules
-mock_shared = MagicMock()
-sys.modules["shared"] = mock_shared
-sys.modules["shared.media"] = MagicMock()
-sys.modules["shared.media.image_processing"] = MagicMock()
+# Mock shared modules' submodules to avoid dependency issues
+sys.modules["shared.workflow"] = MagicMock()
+sys.modules["shared.workflow.sanitizer"] = MagicMock()
+sys.modules["shared.workflow.prompt_extractor"] = MagicMock()
+sys.modules["shared.workflow.workflow_builder"] = MagicMock()
+
+sys.modules["shared.discord"] = MagicMock()
+sys.modules["shared.discord.webhook_client"] = MagicMock()
+sys.modules["shared.discord.message_builder"] = MagicMock()
+sys.modules["shared.discord.cdn_extractor"] = MagicMock()
+
+sys.modules["shared.github_integration"] = MagicMock()
+sys.modules["shared.logging_config"] = MagicMock()
+sys.modules["shared.filename_utils"] = MagicMock()
+sys.modules["shared.path_utils"] = MagicMock()
+
+# Mock shared.media siblings
+sys.modules["shared.media.format_utils"] = MagicMock()
+sys.modules["shared.media.video_encoder"] = MagicMock()
+
+# Note: We do NOT mock "shared", "shared.media", or "shared.media.image_processing"
+# because we want to load the real code for testing.
 
 # Define the function logic we want to verify (simulating the generator consumer)
 def consume_chunks(chunks):
@@ -72,7 +89,7 @@ class TestPILBatchOptimization(unittest.TestCase):
         and that it chunks correctly.
         """
         # Import needs to happen after mocks are set up
-        from nodes.video_node import process_batched_images
+        from shared.media.image_processing import process_batched_images
 
         # Setup mock tensor
         # We need to make sure isinstance(t, torch.Tensor) works
@@ -103,7 +120,7 @@ class TestPILBatchOptimization(unittest.TestCase):
 
         # Mock tensor_to_numpy_uint8 to return numpy arrays of appropriate shape
         # It needs to return (Size, H, W, C)
-        with patch('nodes.video_node.tensor_to_numpy_uint8') as mock_t2n:
+        with patch('shared.media.image_processing.tensor_to_numpy_uint8') as mock_t2n:
             def side_effect(slice_obj):
                 # parse size from string "slice_N"
                 size = int(slice_obj.split('_')[1])

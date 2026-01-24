@@ -28,7 +28,7 @@ from .discord.cdn_extractor import (
     extract_cdn_urls_from_response,
     send_cdn_urls_file
 )
-from .media.image_processing import tensor_to_numpy_uint8
+from .media.image_processing import tensor_to_numpy_uint8, process_batched_images
 from .github_integration import update_github_cdn_urls
 from .logging_config import setup_logging, get_logger
 from .filename_utils import build_filename_with_metadata, get_timestamp_string
@@ -54,6 +54,7 @@ __all__ = [
     'send_cdn_urls_file',
     # Media utilities
     'tensor_to_numpy_uint8',
+    'process_batched_images',
     # GitHub integration
     'update_github_cdn_urls',
     # Logging
