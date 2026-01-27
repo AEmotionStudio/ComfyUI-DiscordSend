@@ -1,3 +1,6 @@
+# Node-only Dependencies (same as requirements.txt)
+# This file exists for clarity - use requirements.txt for ComfyUI Manager
+
 requests>=2.25.0
 Pillow>=9.0.0
 numpy>=1.20.0

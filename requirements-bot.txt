@@ -1,8 +1,12 @@
 # Discord Bot Dependencies
 # Install with: pip install -r requirements-bot.txt
+#
+# Note: This includes node dependencies plus bot-specific packages
 
 # Shared with nodes
 requests>=2.25.0
+Pillow>=9.0.0
+numpy>=1.20.0
 
 # Discord bot framework
 discord.py>=2.3.0
