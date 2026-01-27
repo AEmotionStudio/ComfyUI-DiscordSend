@@ -1,7 +1,10 @@
-# ComfyUI-DiscordSend Dependencies
-# 
-# For nodes only (minimal): pip install -r requirements-nodes.txt
-# For full bot support:     pip install -r requirements-bot.txt
+# ComfyUI-DiscordSend Node Dependencies
 #
-# This file includes all dependencies (bot + nodes)
--r requirements-bot.txt
+# This file contains minimal dependencies for the ComfyUI nodes only.
+# ComfyUI Manager will automatically install these.
+#
+# For Discord bot support, manually run: pip install -r requirements-bot.txt
+
+requests>=2.25.0
+Pillow>=9.0.0
+numpy>=1.20.0
