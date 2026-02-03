@@ -382,13 +382,22 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Set up file naming and path
         if overwrite_target_path:
             # Use the found video file path for overwriting
-            # NOTE: We keep the user's selected format/codec - the file will be replaced with the new format
-            file_path = overwrite_target_path
-            file = os.path.basename(file_path)
-            print(f"Overwrite mode enabled: will overwrite {file_path}")
+            # NOTE: We create a new file with the correct extension for the selected format
+            # and delete the old file to avoid extension/content mismatch
+            old_file_path = overwrite_target_path
+            old_basename = os.path.splitext(os.path.basename(old_file_path))[0]
+            file = f"{old_basename}.{format_ext}"
+            file_path = os.path.join(full_output_folder, file)
+            
+            # Store the old file path for deletion after new file is created
+            overwrite_delete_old = old_file_path if old_file_path != file_path else None
+            
+            print(f"Overwrite mode enabled: will create {file_path}" + 
+                  (f" and delete {old_file_path}" if overwrite_delete_old else ""))
         else:
             file = f"{filename}_{counter:05}.{format_ext}"
             file_path = os.path.join(full_output_folder, file)
+            overwrite_delete_old = None
         
         # Security: Validate output path to prevent symlink overwrites
         validate_path_is_safe(file_path)
@@ -462,6 +471,14 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         print(f"Format {format} doesn't support animation with PIL. Saving first frame only.")
                         pil_images[0].save(file_path, format=format_ext.upper())
                         output_files.append(file_path)
+                    
+                    # Delete old file if overwriting with different extension
+                    if overwrite_delete_old and os.path.exists(overwrite_delete_old):
+                        try:
+                            os.remove(overwrite_delete_old)
+                            print(f"Deleted old file: {overwrite_delete_old}")
+                        except Exception as del_e:
+                            print(f"Warning: Could not delete old file {overwrite_delete_old}: {del_e}")
                 else:
                     print("No images to save")
             except Exception as e:
@@ -608,6 +625,14 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                             raise Exception(f"ffmpeg encoding error: {stderr}")
                         
                         output_files.append(file_path)
+                        
+                        # Delete old file if overwriting with different extension
+                        if overwrite_delete_old and os.path.exists(overwrite_delete_old):
+                            try:
+                                os.remove(overwrite_delete_old)
+                                print(f"Deleted old file: {overwrite_delete_old}")
+                            except Exception as del_e:
+                                print(f"Warning: Could not delete old file {overwrite_delete_old}: {del_e}")
                     except Exception as e:
                         print(f"Error with VHS format encoding: {str(e)}")
                         # Fall back to basic encoding if VHS format fails
@@ -749,6 +774,14 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         raise Exception(f"ffmpeg encoding error: {stderr}")
                     
                     output_files.append(file_path)
+                    
+                    # Delete old file if overwriting with different extension
+                    if overwrite_delete_old and os.path.exists(overwrite_delete_old):
+                        try:
+                            os.remove(overwrite_delete_old)
+                            print(f"Deleted old file: {overwrite_delete_old}")
+                        except Exception as del_e:
+                            print(f"Warning: Could not delete old file {overwrite_delete_old}: {del_e}")
                 except Exception as e:
                     print(f"DiscordSendSaveVideo error: {str(e)}")
                     discord_send_success = False
@@ -764,7 +797,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         else:
                             extension = format_ext
                         
-                        output_file_with_audio = f"{filename}_{counter:05}-audio.{extension}"
+                        output_file_with_audio = f"{os.path.splitext(file)[0]}-audio.{extension}"
                         output_file_with_audio_path = os.path.join(full_output_folder, output_file_with_audio)
                         
                         # Security: Validate output path to prevent symlink overwrites
