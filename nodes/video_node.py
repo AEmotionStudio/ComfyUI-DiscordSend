@@ -233,10 +233,26 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         """Try to delete an old video file during overwrite. Uses safe error handling."""
         if old_path and os.path.exists(old_path):
             try:
+                # Validate path before deletion for security (defense-in-depth)
+                validate_path_is_safe(old_path)
                 os.remove(old_path)
                 print(f"Deleted old file: {old_path}")
             except Exception as del_e:
                 print(f"Warning: Could not delete old file {old_path}: {del_e}")
+    
+    @staticmethod
+    def _build_ffmpeg_base_args(ffmpeg_path, overwrite_last, i_pix_fmt, dimensions, frame_rate, loop_args):
+        """Build base ffmpeg arguments for video encoding."""
+        overwrite_flag = ["-y"] if overwrite_last else []
+        return [
+            ffmpeg_path, "-v", "error"
+        ] + overwrite_flag + [
+            "-f", "rawvideo", 
+            "-pix_fmt", i_pix_fmt,
+            "-s", dimensions, 
+            "-r", str(frame_rate), 
+            "-i", "-"
+        ] + loop_args
 
     def save_video(self, images, filename_prefix="ComfyUI-Video", overwrite_last=False,
                    format="video/h264-mp4", frame_rate=8.0, quality=85, loop_count=0, lossless=False, 
@@ -594,17 +610,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     image_chunks = process_batched_images(image_sequence)
                     
                     # Base ffmpeg arguments
-                    # Add -y flag if overwrite_last is enabled to force overwrite existing files
-                    overwrite_flag = ["-y"] if overwrite_last else []
-                    args = [
-                        ffmpeg_path, "-v", "error"
-                    ] + overwrite_flag + [
-                        "-f", "rawvideo", 
-                        "-pix_fmt", i_pix_fmt,
-                        "-s", dimensions, 
-                        "-r", str(frame_rate), 
-                        "-i", "-"
-                    ] + loop_args
+                    args = self._build_ffmpeg_base_args(
+                        ffmpeg_path, overwrite_last, i_pix_fmt, dimensions, frame_rate, loop_args
+                    )
                     
                     # Apply main pass arguments from format
                     args += video_format['main_pass'] + bitrate_arg + [file_path]
@@ -673,17 +681,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     bitrate_arg = ["-b:v", f"{bitrate}M"]
                 
                 # Base ffmpeg arguments
-                # Add -y flag if overwrite_last is enabled to force overwrite existing files
-                overwrite_flag = ["-y"] if overwrite_last else []
-                args = [
-                    ffmpeg_path, "-v", "error"
-                ] + overwrite_flag + [
-                    "-f", "rawvideo", 
-                    "-pix_fmt", i_pix_fmt,
-                    "-s", dimensions, 
-                    "-r", str(frame_rate), 
-                    "-i", "-"
-                ] + loop_args
+                args = self._build_ffmpeg_base_args(
+                    ffmpeg_path, overwrite_last, i_pix_fmt, dimensions, frame_rate, loop_args
+                )
                 
                 # Format-specific arguments
                 main_pass = []
