@@ -11,8 +11,8 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 # Import nodes from nodes package
-from nodes.image_node import DiscordSendSaveImage
-from nodes.video_node import DiscordSendSaveVideo
+from .nodes.image_node import DiscordSendSaveImage
+from .nodes.video_node import DiscordSendSaveVideo
 
 # Node class mappings for ComfyUI
 NODE_CLASS_MAPPINGS = {
