@@ -26,7 +26,8 @@ from shared import (
     tensor_to_numpy_uint8,
     process_batched_images,
     build_metadata_section,
-    validate_path_is_safe
+    validate_path_is_safe,
+    sanitize_json_for_export
 )
 # Add BaseDiscordNode import
 from .base_node import BaseDiscordNode
@@ -262,9 +263,28 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # 2. Build filename prefix with metadata using base class method
         height, width = images[0].shape[0], images[0].shape[1]
         video_info = {}
-        filename_prefix, video_info = self.build_filename_prefix(
-            filename_prefix, add_date, add_time, add_dimensions, width, height
-        )
+        # When overwrite_last is enabled, don't add date/time/dimensions to filename
+        # as these would create unique filenames each run, defeating the overwrite purpose
+        # We still collect video_info for Discord message display
+        if overwrite_last:
+            # Just use the plain prefix for overwriting, but still collect metadata for display
+            filename_prefix, video_info = self.build_filename_prefix(
+                filename_prefix, False, False, False, width, height
+            )
+            # Add the metadata values manually for Discord display if needed
+            if add_date or add_time:
+                import datetime as dt
+                now = dt.datetime.now()
+                if add_date:
+                    video_info["date"] = now.strftime("%Y-%m-%d")
+                if add_time:
+                    video_info["time"] = now.strftime("%H-%M-%S")
+            if add_dimensions:
+                video_info["dimensions"] = f"{width}x{height}"
+        else:
+            filename_prefix, video_info = self.build_filename_prefix(
+                filename_prefix, add_date, add_time, add_dimensions, width, height
+            )
 
         # Add prefix append
         filename_prefix += self.prefix_append
@@ -275,11 +295,47 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix, dest_folder, images[0].shape[1], images[0].shape[0])
+        
+        # Process format string (need this early for overwrite detection)
+        format_type, format_ext = format.split("/")
+        
+        # Handle special format extensions
+        if format == "video/h264-mp4" or format == "video/h265-mp4":
+            format_ext = "mp4"
+        elif format == "video/vp9-webm":
+            format_ext = "webm"
+        elif format == "video/prores":
+            format_ext = "mov"
+        
+        # Video extensions to look for when finding last video
+        video_extensions = {'.mp4', '.webm', '.gif', '.mov', '.webp'}
             
-        # For overwrite functionality
+        # For TRUE overwrite functionality - find the most recently modified video file
+        overwrite_target_path = None
         if overwrite_last:
-            counter = 1  # Always use the same counter value for overwriting
-            print("Overwrite mode enabled: will overwrite last video with same name")
+            try:
+                # Find all video files in the output folder
+                video_files = []
+                for f in os.listdir(full_output_folder):
+                    file_path_check = os.path.join(full_output_folder, f)
+                    if os.path.isfile(file_path_check):
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in video_extensions:
+                            # Get modification time
+                            mtime = os.path.getmtime(file_path_check)
+                            video_files.append((file_path_check, mtime))
+                
+                if video_files:
+                    # Sort by modification time (most recent first)
+                    video_files.sort(key=lambda x: x[1], reverse=True)
+                    overwrite_target_path = video_files[0][0]
+                    print(f"Overwrite mode: Found most recent video to overwrite: {overwrite_target_path}")
+                else:
+                    print("Overwrite mode: No existing video files found, will create new file")
+                    counter = 1  # Fallback to counter 1 for new file
+            except Exception as e:
+                print(f"Overwrite mode: Error finding last video: {e}, will create new file")
+                counter = 1
         
         # Set metadata
         metadata = PngInfo()
@@ -336,8 +392,16 @@ class DiscordSendSaveVideo(BaseDiscordNode):
             image_sequence = images
         
         # Set up file naming and path
-        file = f"{filename}_{counter:05}.{format_ext}"
-        file_path = os.path.join(full_output_folder, file)
+        if overwrite_target_path:
+            # Use the found video file path for overwriting
+            file_path = overwrite_target_path
+            file = os.path.basename(file_path)
+            # Update format_ext to match the target file's extension
+            format_ext = os.path.splitext(file)[1].lstrip('.')
+            print(f"Overwrite mode enabled: will overwrite {file_path}")
+        else:
+            file = f"{filename}_{counter:05}.{format_ext}"
+            file_path = os.path.join(full_output_folder, file)
         
         # Security: Validate output path to prevent symlink overwrites
         validate_path_is_safe(file_path)
@@ -520,8 +584,11 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     image_chunks = process_batched_images(image_sequence)
                     
                     # Base ffmpeg arguments
+                    # Add -y flag if overwrite_last is enabled to force overwrite existing files
+                    overwrite_flag = ["-y"] if overwrite_last else []
                     args = [
-                        ffmpeg_path, "-v", "error", 
+                        ffmpeg_path, "-v", "error"
+                    ] + overwrite_flag + [
                         "-f", "rawvideo", 
                         "-pix_fmt", i_pix_fmt,
                         "-s", dimensions, 
@@ -593,8 +660,11 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     bitrate_arg = ["-b:v", f"{bitrate}M"]
                 
                 # Base ffmpeg arguments
+                # Add -y flag if overwrite_last is enabled to force overwrite existing files
+                overwrite_flag = ["-y"] if overwrite_last else []
                 args = [
-                    ffmpeg_path, "-v", "error", 
+                    ffmpeg_path, "-v", "error"
+                ] + overwrite_flag + [
                     "-f", "rawvideo", 
                     "-pix_fmt", i_pix_fmt,
                     "-s", dimensions, 
