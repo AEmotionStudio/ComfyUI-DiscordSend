@@ -963,6 +963,8 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         if send_workflow_json:
                              wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
                              if wflow:
+                                 # Sanitize to remove webhook URLs and tokens
+                                 wflow = sanitize_json_for_export(wflow)
                                  json_filename = f"{uuid4()}.json"
                                  json_data = json.dumps(wflow, indent=2).encode('utf-8')
                                  files["workflow"] = (json_filename, json_data)
