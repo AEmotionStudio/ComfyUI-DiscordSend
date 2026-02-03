@@ -26,7 +26,8 @@ from shared import (
     tensor_to_numpy_uint8,
     process_batched_images,
     build_metadata_section,
-    validate_path_is_safe
+    validate_path_is_safe,
+    sanitize_json_for_export
 )
 # Add BaseDiscordNode import
 from .base_node import BaseDiscordNode
@@ -226,6 +227,32 @@ class DiscordSendSaveVideo(BaseDiscordNode):
     def CONTEXT_MENUS(s):
         return {
         }
+    
+    @staticmethod
+    def _try_delete_old_file(old_path):
+        """Try to delete an old video file during overwrite. Uses safe error handling."""
+        if old_path and os.path.exists(old_path):
+            try:
+                # Validate path before deletion for security (defense-in-depth)
+                validate_path_is_safe(old_path)
+                os.remove(old_path)
+                print(f"Deleted old file: {old_path}")
+            except Exception as del_e:
+                print(f"Warning: Could not delete old file {old_path}: {del_e}")
+    
+    @staticmethod
+    def _build_ffmpeg_base_args(ffmpeg_path, overwrite_last, i_pix_fmt, dimensions, frame_rate, loop_args):
+        """Build base ffmpeg arguments for video encoding."""
+        overwrite_flag = ["-y"] if overwrite_last else []
+        return [
+            ffmpeg_path, "-v", "error"
+        ] + overwrite_flag + [
+            "-f", "rawvideo", 
+            "-pix_fmt", i_pix_fmt,
+            "-s", dimensions, 
+            "-r", str(frame_rate), 
+            "-i", "-"
+        ] + loop_args
 
     def save_video(self, images, filename_prefix="ComfyUI-Video", overwrite_last=False,
                    format="video/h264-mp4", frame_rate=8.0, quality=85, loop_count=0, lossless=False, 
@@ -262,9 +289,27 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # 2. Build filename prefix with metadata using base class method
         height, width = images[0].shape[0], images[0].shape[1]
         video_info = {}
-        filename_prefix, video_info = self.build_filename_prefix(
-            filename_prefix, add_date, add_time, add_dimensions, width, height
-        )
+        # When overwrite_last is enabled, don't add date/time/dimensions to filename
+        # as these would create unique filenames each run, defeating the overwrite purpose
+        # We still collect video_info for Discord message display
+        if overwrite_last:
+            # Just use the plain prefix for overwriting, but still collect metadata for display
+            filename_prefix, video_info = self.build_filename_prefix(
+                filename_prefix, False, False, False, width, height
+            )
+            # Add the metadata values manually for Discord display if needed
+            if add_date or add_time:
+                now = datetime.datetime.now()
+                if add_date:
+                    video_info["date"] = now.strftime("%Y-%m-%d")
+                if add_time:
+                    video_info["time"] = now.strftime("%H-%M-%S")
+            if add_dimensions:
+                video_info["dimensions"] = f"{width}x{height}"
+        else:
+            filename_prefix, video_info = self.build_filename_prefix(
+                filename_prefix, add_date, add_time, add_dimensions, width, height
+            )
 
         # Add prefix append
         filename_prefix += self.prefix_append
@@ -275,11 +320,36 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix, dest_folder, images[0].shape[1], images[0].shape[0])
+        
+        # Video extensions to look for when finding last video
+        video_extensions = {'.mp4', '.webm', '.gif', '.mov', '.webp'}
             
-        # For overwrite functionality
+        # For TRUE overwrite functionality - find the most recently modified video file
+        overwrite_target_path = None
         if overwrite_last:
-            counter = 1  # Always use the same counter value for overwriting
-            print("Overwrite mode enabled: will overwrite last video with same name")
+            try:
+                # Find all video files in the output folder
+                video_files = []
+                for f in os.listdir(full_output_folder):
+                    file_path_check = os.path.join(full_output_folder, f)
+                    if os.path.isfile(file_path_check):
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in video_extensions:
+                            # Get modification time
+                            mtime = os.path.getmtime(file_path_check)
+                            video_files.append((file_path_check, mtime))
+                
+                if video_files:
+                    # Sort by modification time (most recent first)
+                    video_files.sort(key=lambda x: x[1], reverse=True)
+                    overwrite_target_path = video_files[0][0]
+                    print(f"Overwrite mode: Found most recent video to overwrite: {overwrite_target_path}")
+                else:
+                    print("Overwrite mode: No existing video files found, will create new file")
+                    counter = 1  # Fallback to counter 1 for new file
+            except Exception as e:
+                print(f"Overwrite mode: Error finding last video: {e}, will create new file")
+                counter = 1
         
         # Set metadata
         metadata = PngInfo()
@@ -336,8 +406,25 @@ class DiscordSendSaveVideo(BaseDiscordNode):
             image_sequence = images
         
         # Set up file naming and path
-        file = f"{filename}_{counter:05}.{format_ext}"
-        file_path = os.path.join(full_output_folder, file)
+        if overwrite_target_path:
+            # Use the found video file path for overwriting
+            # NOTE: We create a new file with the correct extension for the selected format
+            # and delete the old file to avoid extension/content mismatch
+            old_file_path = overwrite_target_path
+            old_basename = os.path.splitext(os.path.basename(old_file_path))[0]
+            file = f"{old_basename}.{format_ext}"
+            file_path = os.path.join(full_output_folder, file)
+            
+            # Store the old file path for deletion after new file is created
+            # Use normcase for case-insensitive comparison on Windows/macOS
+            overwrite_delete_old = old_file_path if os.path.normcase(old_file_path) != os.path.normcase(file_path) else None
+            
+            print(f"Overwrite mode enabled: will create {file_path}" + 
+                  (f" and delete {old_file_path}" if overwrite_delete_old else ""))
+        else:
+            file = f"{filename}_{counter:05}.{format_ext}"
+            file_path = os.path.join(full_output_folder, file)
+            overwrite_delete_old = None
         
         # Security: Validate output path to prevent symlink overwrites
         validate_path_is_safe(file_path)
@@ -411,6 +498,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         print(f"Format {format} doesn't support animation with PIL. Saving first frame only.")
                         pil_images[0].save(file_path, format=format_ext.upper())
                         output_files.append(file_path)
+                    
+                    # Delete old file if overwriting with different extension
+                    self._try_delete_old_file(overwrite_delete_old)
                 else:
                     print("No images to save")
             except Exception as e:
@@ -520,14 +610,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     image_chunks = process_batched_images(image_sequence)
                     
                     # Base ffmpeg arguments
-                    args = [
-                        ffmpeg_path, "-v", "error", 
-                        "-f", "rawvideo", 
-                        "-pix_fmt", i_pix_fmt,
-                        "-s", dimensions, 
-                        "-r", str(frame_rate), 
-                        "-i", "-"
-                    ] + loop_args
+                    args = self._build_ffmpeg_base_args(
+                        ffmpeg_path, overwrite_last, i_pix_fmt, dimensions, frame_rate, loop_args
+                    )
                     
                     # Apply main pass arguments from format
                     args += video_format['main_pass'] + bitrate_arg + [file_path]
@@ -554,6 +639,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                             raise Exception(f"ffmpeg encoding error: {stderr}")
                         
                         output_files.append(file_path)
+                        
+                        # Delete old file if overwriting with different extension
+                        self._try_delete_old_file(overwrite_delete_old)
                     except Exception as e:
                         print(f"Error with VHS format encoding: {str(e)}")
                         # Fall back to basic encoding if VHS format fails
@@ -593,14 +681,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     bitrate_arg = ["-b:v", f"{bitrate}M"]
                 
                 # Base ffmpeg arguments
-                args = [
-                    ffmpeg_path, "-v", "error", 
-                    "-f", "rawvideo", 
-                    "-pix_fmt", i_pix_fmt,
-                    "-s", dimensions, 
-                    "-r", str(frame_rate), 
-                    "-i", "-"
-                ] + loop_args
+                args = self._build_ffmpeg_base_args(
+                    ffmpeg_path, overwrite_last, i_pix_fmt, dimensions, frame_rate, loop_args
+                )
                 
                 # Format-specific arguments
                 main_pass = []
@@ -692,6 +775,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         raise Exception(f"ffmpeg encoding error: {stderr}")
                     
                     output_files.append(file_path)
+                    
+                    # Delete old file if overwriting with different extension
+                    self._try_delete_old_file(overwrite_delete_old)
                 except Exception as e:
                     print(f"DiscordSendSaveVideo error: {str(e)}")
                     discord_send_success = False
@@ -707,7 +793,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         else:
                             extension = format_ext
                         
-                        output_file_with_audio = f"{filename}_{counter:05}-audio.{extension}"
+                        output_file_with_audio = f"{os.path.splitext(file)[0]}-audio.{extension}"
                         output_file_with_audio_path = os.path.join(full_output_folder, output_file_with_audio)
                         
                         # Security: Validate output path to prevent symlink overwrites

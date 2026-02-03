@@ -17,7 +17,8 @@ from typing import Any, Union, List, Optional
 from shared import (
     sanitize_token_from_text,
     process_batched_images,
-    validate_path_is_safe
+    validate_path_is_safe,
+    sanitize_json_for_export
 )
 
 
@@ -452,6 +453,8 @@ class DiscordSendSaveImage(BaseDiscordNode):
                                 if send_workflow_json and (prompt is not None or extra_pnginfo is not None):
                                     wflow = self.extract_workflow_from_metadata(original_prompt, original_extra_pnginfo)
                                     if wflow:
+                                        # Sanitize to remove webhook URLs and tokens
+                                        wflow = sanitize_json_for_export(wflow)
                                         json_filename = f"{os.path.splitext(discord_filename)[0]}.json"
                                         files["workflow"] = (json_filename, json.dumps(wflow, indent=2).encode('utf-8'))
                             
@@ -503,8 +506,10 @@ class DiscordSendSaveImage(BaseDiscordNode):
                     files[f"file{i}"] = (filename, file_bytes)
                 
                 if send_workflow_json and batch_workflow_json:
+                     # Sanitize to remove webhook URLs and tokens
+                     sanitized_workflow = sanitize_json_for_export(batch_workflow_json)
                      json_filename = f"workflow-{uuid4()}.json"
-                     json_data = json.dumps(batch_workflow_json, indent=2)
+                     json_data = json.dumps(sanitized_workflow, indent=2)
                      files["workflow"] = (json_filename, json_data.encode('utf-8'))
                 
                 success, response, new_urls = self.send_discord_files(webhook_url, files, batch_discord_data, save_cdn_urls)
