@@ -273,8 +273,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
             )
             # Add the metadata values manually for Discord display if needed
             if add_date or add_time:
-                import datetime as dt
-                now = dt.datetime.now()
+                now = datetime.datetime.now()
                 if add_date:
                     video_info["date"] = now.strftime("%Y-%m-%d")
                 if add_time:
@@ -295,17 +294,6 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Setup paths using ComfyUI's path validation
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix, dest_folder, images[0].shape[1], images[0].shape[0])
-        
-        # Process format string (need this early for overwrite detection)
-        format_type, format_ext = format.split("/")
-        
-        # Handle special format extensions
-        if format == "video/h264-mp4" or format == "video/h265-mp4":
-            format_ext = "mp4"
-        elif format == "video/vp9-webm":
-            format_ext = "webm"
-        elif format == "video/prores":
-            format_ext = "mov"
         
         # Video extensions to look for when finding last video
         video_extensions = {'.mp4', '.webm', '.gif', '.mov', '.webp'}
@@ -394,10 +382,9 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         # Set up file naming and path
         if overwrite_target_path:
             # Use the found video file path for overwriting
+            # NOTE: We keep the user's selected format/codec - the file will be replaced with the new format
             file_path = overwrite_target_path
             file = os.path.basename(file_path)
-            # Update format_ext to match the target file's extension
-            format_ext = os.path.splitext(file)[1].lstrip('.')
             print(f"Overwrite mode enabled: will overwrite {file_path}")
         else:
             file = f"{filename}_{counter:05}.{format_ext}"
