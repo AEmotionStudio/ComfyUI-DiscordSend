@@ -11,18 +11,19 @@ from typing import Any, Dict, List, Optional, Union
 
 
 # Patterns for detecting sensitive data
-WEBHOOK_PATTERNS = [
-    r"discord\.com/api/webhooks",
-    r"discordapp\.com/api/webhooks",
-]
+# Pre-compile regex for faster matching
+WEBHOOK_REGEX = re.compile(
+    r"(discord\.com/api/webhooks|discordapp\.com/api/webhooks)",
+    re.IGNORECASE
+)
 
-GITHUB_TOKEN_PREFIXES = [
+GITHUB_TOKEN_PREFIXES = (
     "ghp_",        # GitHub personal access token
     "github_pat_", # GitHub personal access token (new format)
     "gho_",        # GitHub OAuth token
     "ghs_",        # GitHub service token
     "ghu_",        # GitHub user-to-server token
-]
+)
 
 
 def is_webhook_url(value: str) -> bool:
@@ -30,9 +31,8 @@ def is_webhook_url(value: str) -> bool:
     if not isinstance(value, str):
         return False
     
-    for pattern in WEBHOOK_PATTERNS:
-        if re.search(pattern, value, re.IGNORECASE):
-            return True
+    if WEBHOOK_REGEX.search(value):
+        return True
     
     # Also check for generic webhook patterns in URLs
     if value.startswith("http") and ("webhook" in value.lower() or "discord" in value.lower()):
@@ -46,11 +46,7 @@ def is_github_token(value: str) -> bool:
     if not isinstance(value, str):
         return False
     
-    for prefix in GITHUB_TOKEN_PREFIXES:
-        if value.startswith(prefix):
-            return True
-    
-    return False
+    return value.startswith(GITHUB_TOKEN_PREFIXES)
 
 
 def is_potential_token(value: str, context_type: str = "") -> bool:
@@ -139,29 +135,45 @@ def sanitize_node_inputs(inputs: Dict, node_type: str = "") -> Dict:
     return result
 
 
-def sanitize_node(node: Dict) -> Dict:
+def sanitize_node(node: Any) -> Any:
     """
     Sanitize a single ComfyUI node.
     
     Args:
-        node: The node dictionary
+        node: The node dictionary or value
         
     Returns:
-        Sanitized node dictionary
+        Sanitized node dictionary or value
     """
     if not isinstance(node, dict):
+        if isinstance(node, str):
+            return sanitize_string(node)
         return node
     
-    result = dict(node)
-    node_type = result.get("type", "")
+    result = {}
+    node_type = node.get("type", "")
     
-    # Sanitize inputs
-    if "inputs" in result and isinstance(result["inputs"], dict):
-        result["inputs"] = sanitize_node_inputs(result["inputs"], node_type)
-    
-    # Sanitize widget values
-    if "widgets_values" in result and isinstance(result["widgets_values"], list):
-        result["widgets_values"] = sanitize_widget_values(result["widgets_values"], node_type)
+    for key, value in node.items():
+        # Handle known sensitive keys
+        if key in ("webhook_url", "github_token"):
+            result[key] = ""
+            continue
+
+        # Context-aware sanitization for inputs and widgets
+        if key == "inputs" and isinstance(value, dict):
+            result[key] = sanitize_node_inputs(value, node_type)
+        elif key == "widgets_values" and isinstance(value, list):
+            result[key] = sanitize_widget_values(value, node_type)
+        else:
+            # Generic sanitization for other fields
+            if isinstance(value, dict):
+                result[key] = sanitize_dict(value)
+            elif isinstance(value, list):
+                result[key] = sanitize_list(value)
+            elif isinstance(value, str):
+                result[key] = sanitize_string(value)
+            else:
+                result[key] = value
     
     return result
 
@@ -178,12 +190,28 @@ def sanitize_dict(data: Dict) -> Dict:
     """
     result = {}
     
+    # Check if this is a workflow object with nodes
+    # We want to process nodes specifically using sanitize_node to ensure correct context
+    # and avoid double-processing (once as generic dict/list, once as nodes)
+    is_workflow = "nodes" in data and isinstance(data["nodes"], (list, dict))
+
     for key, value in data.items():
         # Handle known sensitive keys
         if key in ("webhook_url", "github_token"):
             result[key] = ""
             continue
         
+        # Special handling for "nodes" in workflow
+        if is_workflow and key == "nodes":
+            if isinstance(value, list):
+                result[key] = [sanitize_node(n) for n in value]
+            elif isinstance(value, dict):
+                result[key] = {k: sanitize_node(v) for k, v in value.items()}
+            else:
+                # Fallback if nodes is neither list nor dict (unlikely)
+                result[key] = value
+            continue
+
         # Handle nested structures
         if isinstance(value, dict):
             result[key] = sanitize_dict(value)
@@ -193,14 +221,6 @@ def sanitize_dict(data: Dict) -> Dict:
             result[key] = sanitize_string(value)
         else:
             result[key] = value
-    
-    # Special handling for ComfyUI workflow structure
-    if "nodes" in result:
-        nodes = result["nodes"]
-        if isinstance(nodes, list):
-            result["nodes"] = [sanitize_node(n) for n in nodes]
-        elif isinstance(nodes, dict):
-            result["nodes"] = {k: sanitize_node(v) for k, v in nodes.items()}
     
     return result
 

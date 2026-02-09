@@ -101,6 +101,31 @@ class TestSanitizer(unittest.TestCase):
         result = sanitize_json_for_export(test_data)
         self.assertEqual(result, test_data)
 
+    def test_sanitize_node_other_properties(self):
+        """Should sanitize other properties in nodes that are not inputs/widgets."""
+        test_data = {
+            "nodes": [
+                {
+                    "id": 1,
+                    "type": "SomeNode",
+                    "inputs": {},
+                    "widgets_values": [],
+                    "extra": {
+                        "webhook_url": "https://discord.com/api/webhooks/123/abc"
+                    },
+                    "properties": {
+                        "nested": {
+                             "token": "ghp_secret"
+                        }
+                    }
+                }
+            ]
+        }
+        result = sanitize_json_for_export(test_data)
+        node = result["nodes"][0]
+        self.assertEqual(node["extra"]["webhook_url"], "")
+        self.assertEqual(node["properties"]["nested"]["token"], "")
+
 
 class TestWebhookValidation(unittest.TestCase):
     """Tests for webhook URL validation."""
