@@ -83,5 +83,24 @@ class TestUXTooltips(unittest.TestCase):
         self.assertIn("dangerous for batch production", tooltip_vid)
         self.assertIn("Disabling 'add_time' to overwrite files will cause single-frame playback issues", tooltip_vid)
 
+    def test_include_video_info_tooltip(self):
+        """Test that include_video_info tooltip provides the helpful tip about add_time."""
+        input_types = DiscordSendSaveVideo.INPUT_TYPES()
+        info_config = input_types["optional"]["include_video_info"]
+        tooltip = info_config[1]["tooltip"]
+
+        self.assertIn("TIP", tooltip)
+        self.assertIn("Disable this instead of 'add_time'", tooltip)
+        self.assertIn("avoid the Discord single-frame bug", tooltip)
+
+    def test_resize_to_power_of_2_tooltip(self):
+        """Test that resize_to_power_of_2 tooltip warns about aspect ratio distortion."""
+        input_types = DiscordSendSaveImage.INPUT_TYPES()
+        resize_config = input_types["optional"]["resize_to_power_of_2"]
+        tooltip = resize_config[1]["tooltip"]
+
+        self.assertIn("May distort aspect ratio", tooltip)
+        self.assertIn("Uses the algorithm selected in 'resize_method'", tooltip)
+
 if __name__ == "__main__":
     unittest.main()

@@ -199,7 +199,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                 # Video Info Option
                 "include_video_info": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Whether to include the video information (frame rate, format) in the Discord message."
+                    "tooltip": "Whether to include the video information (frame rate, format) in the Discord message. 💡 TIP: Disable this instead of 'add_time' if you want cleaner filenames but need to avoid the Discord single-frame bug."
                 }),
                 
                 # Mix in shared options
