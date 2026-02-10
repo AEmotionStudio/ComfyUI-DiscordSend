@@ -362,7 +362,7 @@ class DiscordSendSaveImage(BaseDiscordNode):
                 filepath = os.path.join(full_output_folder, file)
             
                 # Security: Validate output path to prevent symlink overwrites
-                validate_path_is_safe(filepath)
+                validate_path_is_safe(filepath, base_dir=full_output_folder)
 
                 try:
                     # Save the image based on format

@@ -229,12 +229,12 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         }
     
     @staticmethod
-    def _try_delete_old_file(old_path):
+    def _try_delete_old_file(old_path, base_dir=None):
         """Try to delete an old video file during overwrite. Uses safe error handling."""
         if old_path and os.path.exists(old_path):
             try:
                 # Validate path before deletion for security (defense-in-depth)
-                validate_path_is_safe(old_path)
+                validate_path_is_safe(old_path, base_dir=base_dir)
                 os.remove(old_path)
                 print(f"Deleted old file: {old_path}")
             except Exception as del_e:
@@ -368,7 +368,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         first_image_path = os.path.join(full_output_folder, first_image_file)
 
         # Security: Validate output path to prevent symlink overwrites
-        validate_path_is_safe(first_image_path)
+        validate_path_is_safe(first_image_path, base_dir=full_output_folder)
 
         Image.fromarray(tensor_to_numpy_uint8(first_image)).save(
             first_image_path,
@@ -427,7 +427,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
             overwrite_delete_old = None
         
         # Security: Validate output path to prevent symlink overwrites
-        validate_path_is_safe(file_path)
+        validate_path_is_safe(file_path, base_dir=full_output_folder)
 
         # Check if we need ffmpeg (for video formats) or can use PIL (for image formats)
         use_pil = format_type == "image" or ffmpeg_path is None
@@ -500,7 +500,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         output_files.append(file_path)
                     
                     # Delete old file if overwriting with different extension
-                    self._try_delete_old_file(overwrite_delete_old)
+                    self._try_delete_old_file(overwrite_delete_old, base_dir=full_output_folder)
                 else:
                     print("No images to save")
             except Exception as e:
@@ -597,7 +597,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     file_path = os.path.join(full_output_folder, file)
                     
                     # Security: Validate output path to prevent symlink overwrites
-                    validate_path_is_safe(file_path)
+                    validate_path_is_safe(file_path, base_dir=full_output_folder)
 
                     # Set up environment
                     env = os.environ.copy()
@@ -641,7 +641,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         output_files.append(file_path)
                         
                         # Delete old file if overwriting with different extension
-                        self._try_delete_old_file(overwrite_delete_old)
+                        self._try_delete_old_file(overwrite_delete_old, base_dir=full_output_folder)
                     except Exception as e:
                         print(f"Error with VHS format encoding: {str(e)}")
                         # Fall back to basic encoding if VHS format fails
@@ -777,7 +777,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                     output_files.append(file_path)
                     
                     # Delete old file if overwriting with different extension
-                    self._try_delete_old_file(overwrite_delete_old)
+                    self._try_delete_old_file(overwrite_delete_old, base_dir=full_output_folder)
                 except Exception as e:
                     print(f"DiscordSendSaveVideo error: {str(e)}")
                     discord_send_success = False
@@ -797,7 +797,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
                         output_file_with_audio_path = os.path.join(full_output_folder, output_file_with_audio)
                         
                         # Security: Validate output path to prevent symlink overwrites
-                        validate_path_is_safe(output_file_with_audio_path)
+                        validate_path_is_safe(output_file_with_audio_path, base_dir=full_output_folder)
 
                         # Set up audio encoding parameters
                         channels = a_waveform.size(1)

@@ -83,20 +83,38 @@ def get_unique_filepath(
     return os.path.join(directory, full_filename)
 
 
-def validate_path_is_safe(path: str) -> None:
+def validate_path_is_safe(path: str, base_dir: Optional[str] = None) -> None:
     """
     Validate that a path is safe to write to.
 
     Checks:
+    - If base_dir is provided, path is contained within base_dir (to prevent ../ traversal)
     - Path is not a symlink (to prevent overwriting targets)
     - Parent directories are not symlinks (to prevent path traversal via symlinks)
 
     Args:
         path: File path to validate
+        base_dir: Optional base directory to restrict path to
 
     Raises:
         ValueError: If path is unsafe
     """
+    # Check if path is within base_dir
+    if base_dir:
+        abs_base = os.path.abspath(base_dir)
+        abs_path = os.path.abspath(path)
+
+        # Use commonpath to ensure path is within base_dir
+        # We need to handle potential different drives on Windows which raises ValueError
+        try:
+            common = os.path.commonpath([abs_base, abs_path])
+        except ValueError:
+            # Raised if paths are on different drives
+            raise ValueError(f"Security error: Path '{path}' is on a different drive than allowed directory '{base_dir}'.")
+
+        if common != abs_base:
+            raise ValueError(f"Security error: Path '{path}' is outside the allowed directory '{base_dir}'.")
+
     # Check if path exists and is a symlink
     if os.path.islink(path):
         raise ValueError(f"Security error: Output path '{path}' is a symlink. Overwriting symlinks is not allowed.")
