@@ -78,7 +78,7 @@ class DiscordSendSaveImage(BaseDiscordNode):
                 }),
                 "resize_to_power_of_2": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Resize images to nearest power of 2 dimensions (useful for game textures). Uses the algorithm selected in 'resize_method'."
+                    "tooltip": "Resize images to nearest power of 2 dimensions (useful for game textures). ⚠️ May distort aspect ratio. Uses the algorithm selected in 'resize_method'."
                 }),
                 "resize_method": (["nearest-exact", "bilinear", "bicubic", "lanczos", "box"], {
                     "default": "lanczos", 
