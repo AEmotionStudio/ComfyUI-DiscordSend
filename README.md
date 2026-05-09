@@ -3,7 +3,7 @@
 # ComfyUI-DiscordSend
 
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-Extension-green?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-1.1.0-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.0.0-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-GPLv3-red?style=for-the-badge)
 ![Dependencies](https://img.shields.io/badge/dependencies-1%20total-brightgreen?style=for-the-badge&color=blue)
 <br>
@@ -24,12 +24,14 @@
 
 ---
 
-## What's New in v1.1.0 (January 10, 2026)
+## What's New in v2.0.0 (January 20, 2026)
 
-### 🚀 Core Updates
-- **Structured Logging**: Implemented comprehensive logging for better debugging and stability.
-- **Testing Suite**: Added initial test framework to ensure reliability.
-- **Enhanced Stability**: Various improvements to image and video handling logic.
+### 🚀 Major Refactoring Release
+- **New Architecture**: Reorganized into `nodes/`, `shared/`, and `bot/` packages for cleaner separation of concerns.
+- **BaseDiscordNode**: Shared base class eliminates 620 lines of duplicated code across image and video nodes.
+- **Shared Utilities**: 17 modular utility files covering Discord webhooks, media processing, and workflow handling.
+- **Discord Bot** *(optional)*: New standalone bot with slash commands, WebSocket reconnection, and job queuing.
+- **Performance**: Optimized image processing with direct Torch operations (~70% faster tensor processing).
 
 📄 See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
@@ -124,6 +126,21 @@ pip install -r requirements-bot.txt
 > - For video functionality, ffmpeg must be installed on your system. The node will automatically detect its presence.
 > - **Nodes only** require just the `requests` library (1 dependency).
 > - **Discord bot** requires additional dependencies (discord.py, aiohttp, sqlalchemy, etc.).
+
+## 🏗️ Architecture Overview
+
+This extension contains **two independent systems**. Most users only need the nodes.
+
+| | ComfyUI Nodes | Discord Bot |
+|---|---|---|
+| **What it does** | Send images/videos to Discord from your workflow | Standalone bot that lets Discord users trigger ComfyUI workflows via slash commands |
+| **How to use** | Add `DiscordSendSaveImage` or `DiscordSendSaveVideo` to your workflow | Run `python -m bot` as a separate process alongside ComfyUI |
+| **Auth method** | Paste a **webhook URL** directly into the node | Requires a **bot token** from the Discord Developer Portal |
+| **Config files needed** | ❌ None — everything is configured in the node itself | ✅ `.env` or `config.yaml` (copy from `.env.example` / `config.yaml.example`) |
+| **Dependencies** | `requests` only | `discord.py`, `aiohttp`, `sqlalchemy`, etc. |
+
+> [!NOTE]
+> The `.env.example` and `config.yaml.example` files in the repository root are **only for the optional Discord bot**. If you just want to send images/videos to Discord from your ComfyUI workflows, you do not need these files. Simply paste your Discord webhook URL into the node's `webhook_url` field.
 
 ## ⚙️ Settings
 
