@@ -17,6 +17,7 @@ from typing import Any, Union, List, Optional
 from shared import (
     sanitize_token_from_text,
     process_batched_images,
+    build_metadata_section,
     validate_path_is_safe,
     sanitize_json_for_export
 )

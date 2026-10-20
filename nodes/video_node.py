@@ -268,6 +268,7 @@ class DiscordSendSaveVideo(BaseDiscordNode):
         results = []
         output_files = []
         discord_sent_files = []
+        discord_cdn_urls = []
         discord_send_success = True
         
         # 1. Sanitize workflow data using base class method
