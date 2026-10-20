@@ -3,7 +3,7 @@
 # ComfyUI-DiscordSend
 
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-Extension-green?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-2.0.0-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.0.1-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-GPLv3-red?style=for-the-badge)
 ![Dependencies](https://img.shields.io/badge/dependencies-1%20total-brightgreen?style=for-the-badge&color=blue)
 <br>

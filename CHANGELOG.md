@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-10-20
+
+### Fixed
+- `DiscordSendSaveImage` failing with `NameError: name 'build_metadata_section' is not defined` when sending metadata to Discord (#57)
+- `DiscordSendSaveVideo` failing to record Discord CDN URLs and crashing when `github_cdn_update` was enabled
+
 ## [2.0.0] - 2026-01-20
 
 ### Major Refactoring Release
